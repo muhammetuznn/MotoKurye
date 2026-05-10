@@ -25,6 +25,11 @@ const ui = {
   startBtn: document.getElementById("startBtn"),
   shopBtn: document.getElementById("shopBtn"),
   closeShopBtn: document.getElementById("closeShopBtn"),
+  settingsPanel: document.getElementById("settingsPanel"),
+  settingsBtn: document.getElementById("settingsBtn"),
+  closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+  soundToggle: document.getElementById("soundToggle"),
+  musicToggle: document.getElementById("musicToggle"),
   restartBtn: document.getElementById("restartBtn"),
   goShopBtn: document.getElementById("goShopBtn"),
   backMenuBtn: document.getElementById("backMenuBtn"),
@@ -32,6 +37,7 @@ const ui = {
 
 
 const STORAGE_KEY = "kacakKuryeSave";
+const SETTINGS_KEY = "kacakKuryeSettings";
 const WORLD = {
   width: 960,
   height: 540,
@@ -296,6 +302,7 @@ const obstacleTypes = [
 ];
 
 let save = loadSave();
+let settings = loadSettings();
 let state = "menu";
 let lastTime = 0;
 let inputDown = false;
@@ -305,6 +312,7 @@ let shopNoticeTimeout = 0;
 let audioCtx = null;
 let audioUnlocked = false;
 let engineAudio = null;
+let musicAudio = null;
 let camera = {
   scale: 1,
   offsetX: 0,
@@ -367,6 +375,25 @@ function normalizeOwnedCities(ownedCities) {
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
+}
+
+function loadSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    if (parsed && typeof parsed === "object") {
+      return {
+        sound: parsed.sound !== false,
+        music: parsed.music !== false,
+      };
+    }
+  } catch {
+    // Ignore corrupt settings and use defaults.
+  }
+  return { sound: true, music: true };
+}
+
+function persistSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 function formatNumber(value) {
@@ -469,6 +496,7 @@ function showScreen(name) {
   }
   state = name;
   stopEngineSound();
+  stopMusicSound();
   syncUi();
 }
 
@@ -482,14 +510,17 @@ function startGame() {
   unlockAudio();
   game = createGame();
   inputDown = false;
+  closeSettings();
   hideScreens();
   state = "playing";
   startEngineSound();
+  startMusicSound();
 }
 
 function endGame() {
   state = "gameOver";
   stopEngineSound();
+  stopMusicSound();
   save.coins += game.runCoins;
   save.bestScore = Math.max(save.bestScore, Math.floor(game.distance));
   save.bestPackages = Math.max(save.bestPackages, game.deliveries);
@@ -515,8 +546,17 @@ function syncUi() {
   ui.bestPackages.textContent = formatNumber(save.bestPackages);
   ui.walletCoins.textContent = formatNumber(save.coins);
   ui.shopCoins.textContent = formatNumber(save.coins);
+  syncSettingsUi();
   renderRecords();
   renderShop();
+}
+
+function syncSettingsUi() {
+  ui.soundToggle.classList.toggle("is-off", !settings.sound);
+  ui.soundToggle.querySelector("strong").textContent = settings.sound ? "Açık" : "Kapalı";
+  ui.musicToggle.classList.toggle("is-off", !settings.music || !settings.sound);
+  ui.musicToggle.disabled = !settings.sound;
+  ui.musicToggle.querySelector("strong").textContent = settings.sound && settings.music ? "Açık" : "Kapalı";
 }
 
 function renderShop() {
@@ -2037,41 +2077,54 @@ function unlockAudio() {
 }
 
 function startEngineSound() {
-  if (!audioUnlocked || !audioCtx) return;
+  if (!settings.sound || !audioUnlocked || !audioCtx) return;
   if (audioCtx.state === "suspended") {
     audioCtx.resume();
   }
   if (engineAudio) return;
   const now = audioCtx.currentTime;
   const master = audioCtx.createGain();
-  const oscLow = audioCtx.createOscillator();
-  const oscHigh = audioCtx.createOscillator();
-  const filter = audioCtx.createBiquadFilter();
+  const piston = audioCtx.createOscillator();
+  const body = audioCtx.createOscillator();
+  const rumble = audioCtx.createBufferSource();
+  const rumbleFilter = audioCtx.createBiquadFilter();
+  const rumbleGain = audioCtx.createGain();
+  const bodyFilter = audioCtx.createBiquadFilter();
   const wobble = audioCtx.createOscillator();
   const wobbleGain = audioCtx.createGain();
 
   master.gain.setValueAtTime(0.0001, now);
-  master.gain.linearRampToValueAtTime(0.045, now + 0.22);
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(720, now);
-  oscLow.type = "sawtooth";
-  oscHigh.type = "square";
-  oscLow.frequency.setValueAtTime(68, now);
-  oscHigh.frequency.setValueAtTime(136, now);
+  master.gain.linearRampToValueAtTime(0.034, now + 0.28);
+  piston.type = "sawtooth";
+  body.type = "triangle";
+  piston.frequency.setValueAtTime(52, now);
+  body.frequency.setValueAtTime(104, now);
+  rumble.buffer = makeNoiseBuffer(0.7);
+  rumble.loop = true;
+  rumbleFilter.type = "bandpass";
+  rumbleFilter.frequency.setValueAtTime(92, now);
+  rumbleFilter.Q.setValueAtTime(1.1, now);
+  rumbleGain.gain.setValueAtTime(0.018, now);
+  bodyFilter.type = "lowpass";
+  bodyFilter.frequency.setValueAtTime(410, now);
   wobble.type = "sine";
-  wobble.frequency.setValueAtTime(19, now);
-  wobbleGain.gain.setValueAtTime(3.5, now);
+  wobble.frequency.setValueAtTime(11, now);
+  wobbleGain.gain.setValueAtTime(5.2, now);
   wobble.connect(wobbleGain);
-  wobbleGain.connect(oscLow.frequency);
-  wobbleGain.connect(oscHigh.frequency);
-  oscLow.connect(filter);
-  oscHigh.connect(filter);
-  filter.connect(master);
+  wobbleGain.connect(piston.frequency);
+  wobbleGain.connect(body.frequency);
+  piston.connect(bodyFilter);
+  body.connect(bodyFilter);
+  rumble.connect(rumbleFilter);
+  rumbleFilter.connect(rumbleGain);
+  bodyFilter.connect(master);
+  rumbleGain.connect(master);
   master.connect(audioCtx.destination);
-  oscLow.start(now);
-  oscHigh.start(now);
+  piston.start(now);
+  body.start(now);
+  rumble.start(now);
   wobble.start(now);
-  engineAudio = { master, oscLow, oscHigh, filter, wobble, wobbleGain };
+  engineAudio = { master, piston, body, rumble, rumbleFilter, rumbleGain, bodyFilter, wobble, wobbleGain };
 }
 
 function stopEngineSound() {
@@ -2080,8 +2133,9 @@ function stopEngineSound() {
   const engine = engineAudio;
   engine.master.gain.cancelScheduledValues(now);
   engine.master.gain.setTargetAtTime(0.0001, now, 0.08);
-  engine.oscLow.stop(now + 0.22);
-  engine.oscHigh.stop(now + 0.22);
+  engine.piston.stop(now + 0.24);
+  engine.body.stop(now + 0.24);
+  engine.rumble.stop(now + 0.24);
   engine.wobble.stop(now + 0.22);
   engineAudio = null;
 }
@@ -2094,18 +2148,138 @@ function updateEngineSound(dt) {
   const turbo = game.player.turboTimer > 0 ? 1 : 0;
   const rain = game.player.rainTimer > 0 ? 1 : 0;
   const crash = game.crashing ? 1 : 0;
-  const base = 58 + speedRatio * 72 + (motor.speed - 1) * 2.1 + turbo * 18 - rain * 8;
-  const volume = crash ? 0.026 : 0.036 + speedRatio * 0.024 + turbo * 0.016 - rain * 0.01;
-  engineAudio.master.gain.setTargetAtTime(Math.max(0.012, volume), now, 0.08);
-  engineAudio.oscLow.frequency.setTargetAtTime(Math.max(36, base), now, 0.06);
-  engineAudio.oscHigh.frequency.setTargetAtTime(Math.max(70, base * (1.92 + turbo * 0.16)), now, 0.06);
-  engineAudio.filter.frequency.setTargetAtTime(520 + speedRatio * 980 + turbo * 420 - rain * 180, now, 0.08);
-  engineAudio.wobble.frequency.setTargetAtTime(14 + speedRatio * 18 + turbo * 10, now, 0.1);
-  engineAudio.wobbleGain.gain.setTargetAtTime(crash ? 9 : 3.4 + speedRatio * 4.5, now, 0.1);
+  const base = 46 + speedRatio * 52 + (motor.speed - 1) * 1.5 + turbo * 12 - rain * 6;
+  const volume = crash ? 0.018 : 0.026 + speedRatio * 0.018 + turbo * 0.01 - rain * 0.008;
+  engineAudio.master.gain.setTargetAtTime(Math.max(0.01, volume), now, 0.11);
+  engineAudio.piston.frequency.setTargetAtTime(Math.max(34, base), now, 0.08);
+  engineAudio.body.frequency.setTargetAtTime(Math.max(68, base * 2.02), now, 0.08);
+  engineAudio.bodyFilter.frequency.setTargetAtTime(320 + speedRatio * 520 + turbo * 180 - rain * 80, now, 0.12);
+  engineAudio.rumbleFilter.frequency.setTargetAtTime(76 + speedRatio * 74 + turbo * 24, now, 0.14);
+  engineAudio.rumbleGain.gain.setTargetAtTime(crash ? 0.012 : 0.014 + speedRatio * 0.018, now, 0.1);
+  engineAudio.wobble.frequency.setTargetAtTime(9 + speedRatio * 10 + turbo * 4, now, 0.14);
+  engineAudio.wobbleGain.gain.setTargetAtTime(crash ? 8 : 4.8 + speedRatio * 3.2, now, 0.14);
+}
+
+function startMusicSound() {
+  if (!settings.sound || !settings.music || !audioUnlocked || !audioCtx || musicAudio) return;
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume();
+  }
+  const now = audioCtx.currentTime;
+  const master = audioCtx.createGain();
+  const padFilter = audioCtx.createBiquadFilter();
+  const padA = audioCtx.createOscillator();
+  const padB = audioCtx.createOscillator();
+  const padGain = audioCtx.createGain();
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.linearRampToValueAtTime(0.26, now + 0.8);
+  padFilter.type = "lowpass";
+  padFilter.frequency.setValueAtTime(680, now);
+  padA.type = "triangle";
+  padB.type = "sine";
+  padA.frequency.setValueAtTime(164.81, now);
+  padB.frequency.setValueAtTime(246.94, now);
+  padGain.gain.setValueAtTime(0.08, now);
+  padA.connect(padFilter);
+  padB.connect(padFilter);
+  padFilter.connect(padGain);
+  padGain.connect(master);
+  master.connect(audioCtx.destination);
+  padA.start(now);
+  padB.start(now);
+  musicAudio = {
+    master,
+    padA,
+    padB,
+    padFilter,
+    padGain,
+    step: 0,
+    nextTime: now + 0.08,
+    timer: 0,
+    stopped: false,
+  };
+  playSound("musicTest");
+  tone(master, now + 0.04, 392, 784, 0.16, "triangle", 0.12);
+  scheduleMusicLoop();
+}
+
+function stopMusicSound() {
+  if (!musicAudio || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const music = musicAudio;
+  music.stopped = true;
+  window.clearTimeout(music.timer);
+  music.master.gain.cancelScheduledValues(now);
+  music.master.gain.setTargetAtTime(0.0001, now, 0.22);
+  music.padA.stop(now + 0.28);
+  music.padB.stop(now + 0.28);
+  musicAudio = null;
+}
+
+function scheduleMusicLoop() {
+  if (!musicAudio || musicAudio.stopped || !audioCtx) return;
+  const lookAhead = 0.5;
+  const stepDuration = 0.18;
+  while (musicAudio.nextTime < audioCtx.currentTime + lookAhead) {
+    playMusicStep(musicAudio.step, musicAudio.nextTime, musicAudio.master);
+    musicAudio.nextTime += stepDuration;
+    musicAudio.step = (musicAudio.step + 1) % 32;
+  }
+  musicAudio.timer = window.setTimeout(scheduleMusicLoop, 90);
+}
+
+function playMusicStep(step, time, output) {
+  const bass = [110, 0, 0, 98, 0, 0, 130, 0, 110, 0, 147, 0, 98, 0, 0, 0];
+  const lead = [392, 0, 440, 0, 523, 0, 494, 392, 0, 0, 440, 0, 587, 0, 523, 0];
+  const bassNote = bass[step % bass.length];
+  const leadNote = lead[step % lead.length];
+  if (step % 4 === 0) {
+    musicKick(output, time);
+  }
+  if (step % 8 === 4) {
+    noise(output, time, 0.08, 0.04, 2400);
+  }
+  if (step % 2 === 1) {
+    musicHat(output, time);
+  }
+  if (bassNote) {
+    tone(output, time, bassNote, bassNote * 0.992, 0.16, "triangle", 0.13);
+  }
+  if (leadNote) {
+    tone(output, time, leadNote, leadNote * 1.006, 0.13, "sine", 0.095);
+    tone(output, time + 0.01, leadNote * 2, leadNote * 2.006, 0.08, "triangle", 0.035);
+  }
+}
+
+function musicKick(output, time) {
+  tone(output, time, 92, 42, 0.16, "sine", 0.18);
+}
+
+function musicHat(output, time) {
+  const sampleRate = audioCtx.sampleRate;
+  const duration = 0.035;
+  const buffer = audioCtx.createBuffer(1, Math.floor(sampleRate * duration), sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  const source = audioCtx.createBufferSource();
+  const filter = audioCtx.createBiquadFilter();
+  const gain = audioCtx.createGain();
+  filter.type = "highpass";
+  filter.frequency.setValueAtTime(5200, time);
+  gain.gain.setValueAtTime(0.034, time);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+  source.buffer = buffer;
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(output);
+  source.start(time);
+  source.stop(time + duration);
 }
 
 function playSound(type) {
-  if (!audioUnlocked || !audioCtx) return;
+  if (!settings.sound || !audioUnlocked || !audioCtx) return;
   const now = audioCtx.currentTime;
   const master = audioCtx.createGain();
   master.gain.setValueAtTime(1, now);
@@ -2139,6 +2313,9 @@ function playSound(type) {
     tone(master, now + 0.08, 580, 820, 0.14, "triangle", 0.1);
   } else if (type === "ui") {
     tone(master, now, 520, 440, 0.06, "triangle", 0.055);
+  } else if (type === "musicTest") {
+    tone(master, now, 392, 784, 0.22, "triangle", 0.18);
+    tone(master, now + 0.12, 523, 1046, 0.2, "sine", 0.12);
   }
 }
 
@@ -2158,12 +2335,7 @@ function tone(output, start, from, to, duration, type, volume) {
 }
 
 function noise(output, start, duration, volume, filterFrequency) {
-  const sampleRate = audioCtx.sampleRate;
-  const buffer = audioCtx.createBuffer(1, Math.max(1, Math.floor(sampleRate * duration)), sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < data.length; i += 1) {
-    data[i] = Math.random() * 2 - 1;
-  }
+  const buffer = makeNoiseBuffer(duration);
   const source = audioCtx.createBufferSource();
   const filter = audioCtx.createBiquadFilter();
   const gain = audioCtx.createGain();
@@ -2179,6 +2351,16 @@ function noise(output, start, duration, volume, filterFrequency) {
   source.stop(start + duration);
 }
 
+function makeNoiseBuffer(duration) {
+  const sampleRate = audioCtx.sampleRate;
+  const buffer = audioCtx.createBuffer(1, Math.max(1, Math.floor(sampleRate * duration)), sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  return buffer;
+}
+
 function bindButton(button, handler, sound = "ui") {
   button.addEventListener("click", () => {
     unlockAudio();
@@ -2187,12 +2369,59 @@ function bindButton(button, handler, sound = "ui") {
   });
 }
 
+function openSettings() {
+  ui.settingsPanel.classList.add("is-visible");
+}
+
+function closeSettings() {
+  ui.settingsPanel.classList.remove("is-visible");
+}
+
+function applyAudioSettings() {
+  persistSettings();
+  syncSettingsUi();
+  if (!settings.sound) {
+    stopEngineSound();
+    stopMusicSound();
+    return;
+  }
+  if (state === "playing") {
+    startEngineSound();
+    if (settings.music) {
+      startMusicSound();
+    } else {
+      stopMusicSound();
+    }
+  } else {
+    stopEngineSound();
+    stopMusicSound();
+  }
+}
+
 bindButton(ui.startBtn, startGame, "start");
 bindButton(ui.restartBtn, startGame, "start");
 bindButton(ui.shopBtn, () => showScreen("shop"));
 bindButton(ui.goShopBtn, () => showScreen("shop"));
 bindButton(ui.closeShopBtn, () => showScreen("menu"));
 bindButton(ui.backMenuBtn, () => showScreen("menu"));
+bindButton(ui.settingsBtn, openSettings);
+bindButton(ui.closeSettingsBtn, closeSettings);
+ui.settingsPanel.addEventListener("click", (event) => {
+  if (event.target === ui.settingsPanel) closeSettings();
+});
+ui.soundToggle.addEventListener("click", () => {
+  unlockAudio();
+  settings.sound = !settings.sound;
+  applyAudioSettings();
+  playSound("ui");
+});
+ui.musicToggle.addEventListener("click", () => {
+  if (!settings.sound) return;
+  unlockAudio();
+  settings.music = !settings.music;
+  applyAudioSettings();
+  playSound("ui");
+});
 ui.motorsTab.addEventListener("click", () => {
   unlockAudio();
   playSound("ui");
@@ -2233,9 +2462,15 @@ window.addEventListener("keyup", (event) => {
   }
 });
 window.addEventListener("resize", resizeCanvas);
-window.addEventListener("blur", stopEngineSound);
+window.addEventListener("blur", () => {
+  stopEngineSound();
+  stopMusicSound();
+});
 window.addEventListener("focus", () => {
-  if (state === "playing") startEngineSound();
+  if (state === "playing") {
+    startEngineSound();
+    startMusicSound();
+  }
 });
 
 resizeCanvas();

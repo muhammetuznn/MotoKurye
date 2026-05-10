@@ -9,6 +9,31 @@
   <body>
     <main class="app-shell">
       <canvas id="game" aria-label="Kaçak Kurye: Son Paket oyun alanı"></canvas>
+      <button id="settingsBtn" class="settings-button" type="button" aria-label="Ayarlar" title="Ayarlar">
+        <span aria-hidden="true"></span>
+      </button>
+
+      <section id="settingsPanel" class="settings-panel" aria-label="Ayarlar">
+        <div class="settings-card">
+          <div class="screen-head">
+            <div>
+              <p class="kicker">Ayarlar</p>
+              <h2>Ses</h2>
+            </div>
+            <button id="closeSettingsBtn" class="icon-button" type="button" title="Kapat">×</button>
+          </div>
+          <button id="soundToggle" class="setting-toggle" type="button">
+            <span class="toggle-icon sound-icon" aria-hidden="true"></span>
+            <span>Tüm sesler</span>
+            <strong>Açık</strong>
+          </button>
+          <button id="musicToggle" class="setting-toggle" type="button">
+            <span class="toggle-icon music-icon" aria-hidden="true"></span>
+            <span>Müzik</span>
+            <strong>Açık</strong>
+          </button>
+        </div>
+      </section>
 
       <section id="menu" class="screen is-visible">
         <div class="logo-block">

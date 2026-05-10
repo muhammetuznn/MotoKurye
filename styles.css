@@ -215,17 +215,24 @@ h2 {
 }
 
 .icon-play::before {
-  clip-path: polygon(24% 14%, 24% 86%, 86% 50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background:
+    linear-gradient(90deg, currentColor 0 0) 55% 50% / 9px 13px no-repeat,
+    currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%, 0 65%, 36% 50%, 0 35%);
 }
 
 .icon-shop::before {
-  width: 24px;
-  height: 21px;
+  width: 28px;
+  height: 22px;
   background:
-    radial-gradient(circle at 25% 84%, currentColor 0 9%, transparent 10%),
-    radial-gradient(circle at 76% 84%, currentColor 0 9%, transparent 10%),
-    linear-gradient(currentColor 0 0) 22% 68% / 62% 12% no-repeat,
-    linear-gradient(currentColor 0 0) 30% 34% / 54% 30% no-repeat;
+    radial-gradient(circle at 24% 82%, transparent 0 14%, currentColor 15% 28%, transparent 29%),
+    radial-gradient(circle at 76% 82%, transparent 0 14%, currentColor 15% 28%, transparent 29%),
+    linear-gradient(currentColor 0 0) 18% 58% / 64% 16% no-repeat,
+    linear-gradient(135deg, transparent 0 15%, currentColor 16% 28%, transparent 29% 100%) 0 20% / 42% 42% no-repeat,
+    linear-gradient(currentColor 0 0) 52% 30% / 34% 34% no-repeat;
   clip-path: none;
 }
 
@@ -241,7 +248,7 @@ h2 {
 .icon-restart::after {
   content: "";
   position: absolute;
-  left: calc(50% - 66px);
+  left: calc(50% - 82px);
   top: calc(50% - 13px);
   width: 8px;
   height: 8px;
@@ -251,11 +258,123 @@ h2 {
 }
 
 .icon-home::before {
-  width: 22px;
-  height: 22px;
+  width: 25px;
+  height: 24px;
   background:
-    linear-gradient(currentColor 0 0) 28% 52% / 44% 38% no-repeat,
-    linear-gradient(45deg, transparent 43%, currentColor 44% 58%, transparent 59%) center 16% / 100% 82% no-repeat;
+    linear-gradient(currentColor 0 0) 31% 54% / 42% 38% no-repeat,
+    linear-gradient(135deg, transparent 36%, currentColor 37% 54%, transparent 55%) 30% 6% / 58% 62% no-repeat,
+    linear-gradient(45deg, transparent 36%, currentColor 37% 54%, transparent 55%) 70% 6% / 58% 62% no-repeat;
+}
+
+.settings-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(4, 9, 18, 0.68);
+  backdrop-filter: blur(12px);
+}
+
+.settings-button span {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 4px dotted currentColor;
+  border-radius: 50%;
+}
+
+.settings-button span::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+}
+
+.settings-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 7, 17, 0.48);
+}
+
+.settings-panel.is-visible {
+  display: grid;
+}
+
+.settings-card {
+  width: min(390px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background: var(--panel-strong);
+  box-shadow: 0 26px 74px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+}
+
+.setting-toggle {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  text-align: left;
+}
+
+.setting-toggle strong {
+  min-width: 58px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(68, 215, 182, 0.18);
+  color: var(--mint);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.setting-toggle.is-off strong {
+  background: rgba(255, 91, 110, 0.15);
+  color: #ff9aa7;
+}
+
+.setting-toggle:disabled {
+  cursor: default;
+  opacity: 0.48;
+  filter: none;
+}
+
+.toggle-icon {
+  width: 28px;
+  height: 28px;
+  color: currentColor;
+}
+
+.sound-icon {
+  background:
+    linear-gradient(currentColor 0 0) 0 35% / 32% 30% no-repeat,
+    linear-gradient(135deg, transparent 0 40%, currentColor 41% 63%, transparent 64%) 28% 18% / 42% 64% no-repeat,
+    radial-gradient(circle at 78% 50%, transparent 0 42%, currentColor 43% 50%, transparent 51%);
+}
+
+.music-icon {
+  background:
+    radial-gradient(circle at 26% 82%, currentColor 0 17%, transparent 18%),
+    radial-gradient(circle at 72% 72%, currentColor 0 17%, transparent 18%),
+    linear-gradient(currentColor 0 0) 36% 13% / 9% 68% no-repeat,
+    linear-gradient(currentColor 0 0) 72% 6% / 9% 58% no-repeat,
+    linear-gradient(currentColor 0 0) 36% 8% / 45% 10% no-repeat;
 }
 
 .primary {
