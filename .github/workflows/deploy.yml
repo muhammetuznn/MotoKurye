@@ -1,0 +1,29 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH ile sunucuda güncelle ve yeniden başlat
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT != '' && secrets.VPS_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.VPS_APP_PATH }}"
+            git fetch origin
+            git checkout "${{ secrets.VPS_GIT_BRANCH != '' && secrets.VPS_GIT_BRANCH || 'main' }}"
+            git pull --ff-only origin "${{ secrets.VPS_GIT_BRANCH != '' && secrets.VPS_GIT_BRANCH || 'main' }}"
+            sudo systemctl restart ${{ secrets.VPS_SYSTEMD_UNIT != '' && secrets.VPS_SYSTEMD_UNIT || 'motokurye' }}

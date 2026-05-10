@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Kaçak Kurye: Son Paket</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <canvas id="game" aria-label="Kaçak Kurye: Son Paket oyun alanı"></canvas>
+
+      <section id="menu" class="screen is-visible">
+        <div class="logo-block">
+          <p class="kicker">Son paket modu</p>
+          <h1>Kaçak Kurye</h1>
+          <h2>Son Paket</h2>
+        </div>
+        <div class="panel compact">
+          <div class="stat-row">
+            <span>Mesafe rekoru</span>
+            <strong id="bestScore">0 m</strong>
+          </div>
+          <div class="stat-row">
+            <span>Paket rekoru</span>
+            <strong id="bestPackages">0</strong>
+          </div>
+          <div class="stat-row">
+            <span>Coin</span>
+            <strong id="walletCoins">0</strong>
+          </div>
+          <div class="records-block">
+            <h3>Rekor Tablosu</h3>
+            <div id="recordsList" class="records-list"></div>
+          </div>
+          <button id="startBtn" class="primary">Başla</button>
+          <button id="shopBtn" class="secondary">Market</button>
+        </div>
+      </section>
+
+      <section id="shop" class="screen">
+        <div class="panel wide">
+          <div class="screen-head">
+            <div>
+              <p class="kicker">Motor garajı</p>
+              <h2>Motorlar</h2>
+            </div>
+            <button id="closeShopBtn" class="icon-button" title="Menüye dön">×</button>
+          </div>
+          <div class="stat-row">
+            <span>Coin</span>
+            <strong id="shopCoins">0</strong>
+          </div>
+          <div class="shop-tabs" role="tablist" aria-label="Market kategorileri">
+            <button id="motorsTab" class="is-active" type="button">Motorlar</button>
+            <button id="citiesTab" type="button">Şehirler</button>
+          </div>
+          <div id="shopItems" class="shop-content"></div>
+        </div>
+      </section>
+
+      <section id="gameOver" class="screen">
+        <div class="panel compact">
+          <p class="kicker">Paket hâlâ umutlu</p>
+          <h2>Kaza yaptın!</h2>
+          <div class="stat-row">
+            <span>Mesafe</span>
+            <strong id="finalDistance">0 m</strong>
+          </div>
+          <div class="stat-row">
+            <span>Teslimat</span>
+            <strong id="finalDeliveries">0</strong>
+          </div>
+          <div class="stat-row">
+            <span>Kazanılan coin</span>
+            <strong id="finalCoins">0</strong>
+          </div>
+          <button id="restartBtn" class="primary">Tekrar oyna</button>
+          <button id="goShopBtn" class="secondary">Market</button>
+          <button id="backMenuBtn" class="ghost">Ana menü</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
