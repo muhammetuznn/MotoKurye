@@ -39,6 +39,8 @@ Sonra tarayıcıda `http://127.0.0.1:4173/` adresini açın.
 - Turbo power-up: kısa süre hızı artırır.
 - Manyetik çanta power-up: yakındaki coinleri kuryeye çeker.
 - Yağmur bulutu: öldürmez, kısa süre hız ve kontrolü düşürür.
+- Power-up göstergeleri yazı yerine Canvas ikonlarıyla çizilir.
+- Mıknatıs ikonu için `Asssets/powerups/miknatis.png` varsa o PNG kullanılır; yoksa Canvas fallback çizilir.
 - Yakın sıyrılma bonusu: engele çok yakın geçince +2 coin verir.
 - Daha yumuşak fizik, daha adil ilk saniyeler ve zorluk artışı.
 

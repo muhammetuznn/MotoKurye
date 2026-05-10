@@ -197,6 +197,67 @@ h2 {
   margin-top: 14px;
 }
 
+.icon-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.icon-label::before {
+  content: "";
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+}
+
+.icon-play::before {
+  clip-path: polygon(24% 14%, 24% 86%, 86% 50%);
+}
+
+.icon-shop::before {
+  width: 24px;
+  height: 21px;
+  background:
+    radial-gradient(circle at 25% 84%, currentColor 0 9%, transparent 10%),
+    radial-gradient(circle at 76% 84%, currentColor 0 9%, transparent 10%),
+    linear-gradient(currentColor 0 0) 22% 68% / 62% 12% no-repeat,
+    linear-gradient(currentColor 0 0) 30% 34% / 54% 30% no-repeat;
+  clip-path: none;
+}
+
+.icon-restart::before {
+  width: 22px;
+  height: 22px;
+  border: 3px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.icon-restart::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 66px);
+  top: calc(50% - 13px);
+  width: 8px;
+  height: 8px;
+  border-top: 3px solid currentColor;
+  border-left: 3px solid currentColor;
+  transform: rotate(-22deg);
+}
+
+.icon-home::before {
+  width: 22px;
+  height: 22px;
+  background:
+    linear-gradient(currentColor 0 0) 28% 52% / 44% 38% no-repeat,
+    linear-gradient(45deg, transparent 43%, currentColor 44% 58%, transparent 59%) center 16% / 100% 82% no-repeat;
+}
+
 .primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #241000;
@@ -229,6 +290,26 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
+}
+
+.shop-notice {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin-top: 10px;
+  color: var(--accent);
+  font-size: 0.86rem;
+  font-weight: 900;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.shop-notice.is-visible {
+  opacity: 1;
+}
+
+.shop-notice.is-warning {
+  color: var(--danger);
 }
 
 .shop-tabs button {
