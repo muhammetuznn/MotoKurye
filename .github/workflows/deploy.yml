@@ -38,10 +38,22 @@ jobs:
  
       - name: systemd servisini yeniden baslat
         uses: appleboy/ssh-action@v1.2.2
+        env:
+          APP_PATH: ${{ secrets.VPS_APP_PATH }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_SSH_PORT != '' && secrets.VPS_SSH_PORT || 22 }}
+          envs: APP_PATH
           script: |
-            sudo systemctl restart ${{ secrets.VPS_SYSTEMD_UNIT != '' && secrets.VPS_SYSTEMD_UNIT || 'motokurye' }}
+            UNIT="${{ secrets.VPS_SYSTEMD_UNIT != '' && secrets.VPS_SYSTEMD_UNIT || 'motokurye' }}"
+            if ! sudo systemctl cat "${UNIT}.service" >/dev/null 2>&1; then
+              echo "HATA: ${UNIT}.service yok (bir kez kurulmali)."
+              echo "Sunucuda:"
+              echo "  sudo cp \"${APP_PATH}/deploy/motokurye.service.example\" /etc/systemd/system/${UNIT}.service"
+              echo "  sudo nano /etc/systemd/system/${UNIT}.service"
+              echo "  sudo systemctl daemon-reload && sudo systemctl enable --now ${UNIT}"
+              exit 1
+            fi
+            sudo systemctl restart "${UNIT}"
