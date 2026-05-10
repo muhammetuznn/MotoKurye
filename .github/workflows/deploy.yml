@@ -1,18 +1,42 @@
 name: Deploy to VPS
-
+ 
 on:
   push:
     branches: [main, master]
-
+ 
 concurrency:
   group: deploy-vps
   cancel-in-progress: true
-
+ 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH ile sunucuda güncelle ve yeniden başlat
+      - name: Repoyu checkout
+        uses: actions/checkout@v4
+ 
+      - name: Dosyalari rsync ile sunucuya (git gerekmez)
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT != '' && secrets.VPS_SSH_PORT || 22 }}
+        run: |
+          set -euo pipefail
+          test -n "${VPS_APP_PATH}" || { echo "VPS_APP_PATH secret bos"; exit 1; }
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_deploy
+          chmod 600 ~/.ssh/vps_deploy
+          ssh-keyscan -p "$VPS_SSH_PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          rsync -avz --delete \
+            -e "ssh -i $HOME/.ssh/vps_deploy -p $VPS_SSH_PORT -o StrictHostKeyChecking=yes" \
+            --exclude '.git' \
+            --exclude '.github' \
+            ./ "${VPS_USER}@${VPS_HOST}:${VPS_APP_PATH}/"
+ 
+      - name: systemd servisini yeniden baslat
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -20,9 +44,4 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_SSH_PORT != '' && secrets.VPS_SSH_PORT || 22 }}
           script: |
-            set -e
-            cd "${{ secrets.VPS_APP_PATH }}"
-            git fetch origin
-            git checkout "${{ secrets.VPS_GIT_BRANCH != '' && secrets.VPS_GIT_BRANCH || 'main' }}"
-            git pull --ff-only origin "${{ secrets.VPS_GIT_BRANCH != '' && secrets.VPS_GIT_BRANCH || 'main' }}"
             sudo systemctl restart ${{ secrets.VPS_SYSTEMD_UNIT != '' && secrets.VPS_SYSTEMD_UNIT || 'motokurye' }}
