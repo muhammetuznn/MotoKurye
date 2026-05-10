@@ -29,6 +29,7 @@ const ui = {
   backMenuBtn: document.getElementById("backMenuBtn"),
 };
 
+
 const STORAGE_KEY = "kacakKuryeSave";
 const WORLD = {
   width: 960,
