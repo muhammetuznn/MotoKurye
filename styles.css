@@ -285,16 +285,28 @@ h2 {
   position: relative;
   width: 24px;
   height: 24px;
-  border: 4px dotted currentColor;
-  border-radius: 50%;
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(currentColor 0 0) 0 38% / 34% 28% no-repeat,
+    linear-gradient(135deg, transparent 0 38%, currentColor 39% 63%, transparent 64%) 28% 18% / 42% 64% no-repeat,
+    radial-gradient(circle at 76% 50%, transparent 0 42%, currentColor 43% 50%, transparent 51%);
 }
 
 .settings-button span::after {
   content: "";
   position: absolute;
-  inset: 5px;
-  border: 3px solid currentColor;
-  border-radius: 50%;
+  inset: auto -3px 10px 2px;
+  width: 29px;
+  height: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  transform: rotate(-42deg);
+}
+
+.settings-button.is-muted span::after {
+  background: var(--danger);
 }
 
 .settings-panel {
@@ -708,6 +720,15 @@ h2 {
 @media (max-width: 720px) {
   .app-shell {
     min-height: 460px;
+  }
+
+  .settings-button {
+    top: auto;
+    right: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    left: 14px;
+    width: 46px;
+    min-height: 46px;
   }
 
   .screen {

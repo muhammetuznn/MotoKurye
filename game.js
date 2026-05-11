@@ -1422,15 +1422,57 @@ function drawScreenHud() {
   if (game.messageTimer > 0) {
     const width = compact ? Math.min(window.innerWidth - 24, 300) : 300;
     const x = window.innerWidth / 2 - width / 2;
-    const y = compact ? window.innerHeight - 76 : 76;
+    const hudBottom = compact ? top + (pillH + gap) * 3 : 66;
+    const y = Math.min(window.innerHeight * 0.28, hudBottom + (compact ? 8 : 10));
     ctx.globalAlpha = clamp(game.messageTimer, 0, 1);
-    roundRect(x, y, width, 42, 8, "rgba(255, 178, 56, 0.92)");
-    ctx.fillStyle = "#241000";
-    ctx.textAlign = "center";
-    ctx.font = `900 ${compact ? 14 : 17}px system-ui`;
-    ctx.fillText(game.message, x + width / 2, y + 27);
+    drawMessageSign(x, y, width, compact ? 40 : 44, game.message, compact);
     ctx.globalAlpha = 1;
   }
+  ctx.restore();
+}
+
+function drawMessageSign(x, y, width, height, text, compact) {
+  const postW = 8;
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+  ctx.beginPath();
+  ctx.ellipse(x + width / 2, y + height + 8, width * 0.38, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#6b4a21";
+  roundRect(x + 24, y + height - 2, postW, 18, 3, "#6b4a21", "#2a1706");
+  roundRect(x + width - 32, y + height - 2, postW, 18, 3, "#6b4a21", "#2a1706");
+  roundRect(x, y, width, height, 8, "#241608", "#ffb238");
+  roundRect(x + 5, y + 5, width - 10, height - 10, 6, "rgba(255, 178, 56, 0.14)", "rgba(255, 178, 56, 0.5)");
+  ctx.fillStyle = "#ffb238";
+  ctx.beginPath();
+  ctx.moveTo(x + 12, y + height / 2);
+  ctx.lineTo(x + 24, y + 10);
+  ctx.lineTo(x + 24, y + height - 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + width - 12, y + height / 2);
+  ctx.lineTo(x + width - 24, y + 10);
+  ctx.lineTo(x + width - 24, y + height - 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.48)";
+  for (const sx of [x + 34, x + width - 34]) {
+    ctx.beginPath();
+    ctx.arc(sx, y + 12, 2.4, 0, Math.PI * 2);
+    ctx.arc(sx, y + height - 12, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#ffe7a3";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${compact ? 13 : 16}px system-ui`;
+  const maxTextWidth = width - 58;
+  let label = text;
+  while (ctx.measureText(label).width > maxTextWidth && label.length > 8) {
+    label = `${label.slice(0, -2)}…`;
+  }
+  ctx.fillText(label, x + width / 2, y + height / 2 + 1);
   ctx.restore();
 }
 
@@ -1445,6 +1487,7 @@ function drawMetricPill(x, y, w, h, icon, value, accent) {
   ctx.fillText(String(value), x + 34, y + h / 2 + 1);
   ctx.textBaseline = "alphabetic";
 }
+
 
 function drawSpeedGauge(x, y, w, h, speed, compact) {
   const accent = speed > 125 ? "#ff5b6e" : speed > 95 ? "#ffb238" : "#44d7b6";
