@@ -123,8 +123,6 @@ const cities = [
     moon: true,
     spire: true,
   },
-
-  
   {
     id: "mexicoCity",
     asset: "mexicoCity",
