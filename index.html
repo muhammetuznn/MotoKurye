@@ -9,9 +9,18 @@
   <body>
     <main class="app-shell">
       <canvas id="game" aria-label="Kaçak Kurye: Son Paket oyun alanı"></canvas>
-      <button id="settingsBtn" class="settings-button" type="button" aria-label="Ayarlar" title="Ayarlar">
+      <button id="settingsBtn" class="settings-button" type="button" aria-label="Ses ayarları" title="Ses ayarları">
         <span aria-hidden="true"></span>
       </button>
+
+      <section id="orientationPanel" class="orientation-panel" aria-label="Yatay ekran uyarısı">
+        <div class="orientation-card">
+          <div class="phone-turn" aria-hidden="true"></div>
+          <p class="kicker">Mobil oyun modu</p>
+          <h2>Telefonu yan çevir</h2>
+          <p>Yol daha geniş görünür, engelleri daha rahat yakalarsın.</p>
+        </div>
+      </section>
 
       <section id="settingsPanel" class="settings-panel" aria-label="Ayarlar">
         <div class="settings-card">

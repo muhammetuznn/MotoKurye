@@ -33,6 +33,7 @@ const ui = {
   restartBtn: document.getElementById("restartBtn"),
   goShopBtn: document.getElementById("goShopBtn"),
   backMenuBtn: document.getElementById("backMenuBtn"),
+  orientationPanel: document.getElementById("orientationPanel"),
 };
 
 
@@ -293,7 +294,7 @@ const motors = [
 const obstacleTypes = [
   { id: "door", label: "Kapı", asset: "car", w: 150, h: 104, ground: true, minDistance: 0, damage: true },
   { id: "seagull", label: "Martı", asset: "bird", w: 96, h: 68, air: true, minDistance: 260, damage: true },
-  { id: "cat", label: "Kedi", asset: "cat", w: 104, h: 66, ground: true, minDistance: 0, damage: true },
+  { id: "cat", label: "Kedi", asset: "cat", w: 104, h: 66, jumper: true, minDistance: 240, damage: true },
   { id: "pothole", label: "Çukur", asset: "pothole", w: 112, h: 48, ground: true, minDistance: 0, damage: true },
   { id: "barrier", label: "Zabıta", asset: "barrier", w: 128, h: 82, ground: true, minDistance: 170, damage: true },
   { id: "bump", label: "Kasis", asset: "bump", w: 118, h: 36, ground: true, minDistance: 0, damage: true },
@@ -313,6 +314,7 @@ let audioCtx = null;
 let audioUnlocked = false;
 let engineAudio = null;
 let musicAudio = null;
+let pendingLandscapeStart = false;
 let camera = {
   scale: 1,
   offsetX: 0,
@@ -508,6 +510,18 @@ function hideScreens() {
 
 function startGame() {
   unlockAudio();
+  if (shouldPromptLandscape()) {
+    pendingLandscapeStart = true;
+    closeSettings();
+    ui.orientationPanel.classList.add("is-visible");
+    return;
+  }
+  beginGame();
+}
+
+function beginGame() {
+  pendingLandscapeStart = false;
+  ui.orientationPanel.classList.remove("is-visible");
   game = createGame();
   inputDown = false;
   closeSettings();
@@ -515,6 +529,18 @@ function startGame() {
   state = "playing";
   startEngineSound();
   startMusicSound();
+}
+
+function shouldPromptLandscape() {
+  const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  return coarsePointer && window.innerWidth < 820 && window.innerHeight > window.innerWidth;
+}
+
+function handleViewportChange() {
+  resizeCanvas();
+  if (pendingLandscapeStart && !shouldPromptLandscape()) {
+    beginGame();
+  }
 }
 
 function endGame() {
@@ -856,6 +882,9 @@ function tickPowerups(dt) {
 function moveAndCull(items, dt) {
   for (const item of items) {
     item.x -= game.speed * dt;
+    if (item.jumper) {
+      updateJumpingObstacle(item, dt);
+    }
     if (item.wave) {
       item.y = item.baseY + Math.sin(performance.now() / 320 + item.phase) * item.wave;
     }
@@ -870,6 +899,16 @@ function moveAndCull(items, dt) {
   }
 }
 
+function updateJumpingObstacle(item, dt) {
+  item.jumpTime = (item.jumpTime || 0) + dt * (item.jumpSpeed || 1);
+  const cycle = item.jumpTime % 1;
+  const arc = Math.sin(cycle * Math.PI);
+  const lean = (cycle - 0.5) * 0.28;
+  item.y = item.baseY - arc * (item.jumpHeight || 92);
+  item.rotation = lean;
+  item.squash = 1 - arc * 0.08;
+}
+
 function spawnObstacle() {
   let available = obstacleTypes.filter((item) => game.distance >= item.minDistance);
   if (game.distance < 650) {
@@ -882,6 +921,9 @@ function spawnObstacle() {
     y = type.id === "cloud" ? random(82, 138) : random(132, 278);
     wave = game.distance > 760 && type.id !== "cloud" ? random(12, 30) : 0;
   }
+  const jumpSpeed = type.jumper ? random(0.92, 1.2) : 0;
+  const jumpHeight = type.jumper ? random(82, 118) : 0;
+  const jumpTime = type.jumper ? random(0.05, 0.28) : 0;
   game.lastObstacleId = type.id;
   game.obstacles.push({
     ...type,
@@ -890,6 +932,11 @@ function spawnObstacle() {
     y,
     baseY: y,
     wave,
+    jumpSpeed,
+    jumpHeight,
+    jumpTime,
+    rotation: 0,
+    squash: 1,
     phase: random(0, Math.PI * 2),
   });
 }
@@ -1089,6 +1136,9 @@ function obstacleHitbox(obstacle) {
   }
   if (obstacle.id === "seagull") {
     return { x: obstacle.x + 18, y: obstacle.y + 18, w: obstacle.w - 30, h: obstacle.h - 30 };
+  }
+  if (obstacle.id === "cat") {
+    return { x: obstacle.x + 18, y: obstacle.y + 14, w: obstacle.w - 36, h: obstacle.h - 20 };
   }
   if (obstacle.id === "cloud") {
     return { x: obstacle.x + 18, y: obstacle.y + 44, w: obstacle.w - 36, h: 118 };
@@ -1939,6 +1989,9 @@ function drawObstacles() {
 
 function drawAssetObstacle(obstacle) {
   if (!obstacle.asset) return false;
+  if (obstacle.jumper) {
+    return drawJumpingAssetObstacle(obstacle);
+  }
   const bob = obstacle.id === "seagull" ? Math.sin(performance.now() / 140) * 4 : 0;
   const ok = drawAsset(obstacle.asset, obstacle.x, obstacle.y + bob, obstacle.w, obstacle.h);
   if (ok && obstacle.id === "cloud") {
@@ -1952,6 +2005,28 @@ function drawAssetObstacle(obstacle) {
     ctx.restore();
   }
   return ok;
+}
+
+function drawJumpingAssetObstacle(obstacle) {
+  const image = assets[obstacle.asset];
+  if (!image || !image.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const shadowScale = clamp(1 - ((obstacle.baseY - obstacle.y) / Math.max(1, obstacle.jumpHeight || 1)) * 0.35, 0.45, 1);
+  ctx.save();
+  ctx.globalAlpha = 0.24 * shadowScale;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(obstacle.x + obstacle.w * 0.5, obstacle.baseY + obstacle.h - 4, obstacle.w * 0.34 * shadowScale, 8 * shadowScale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2);
+  ctx.rotate(obstacle.rotation || 0);
+  ctx.scale(1 + (1 - (obstacle.squash || 1)) * 0.55, obstacle.squash || 1);
+  ctx.drawImage(image, -obstacle.w / 2, -obstacle.h / 2, obstacle.w, obstacle.h);
+  ctx.restore();
+  return true;
 }
 
 function drawDoorObstacle(o) {
@@ -2504,7 +2579,8 @@ window.addEventListener("keyup", (event) => {
     inputDown = false;
   }
 });
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", handleViewportChange);
+window.addEventListener("orientationchange", handleViewportChange);
 window.addEventListener("blur", () => {
   stopEngineSound();
   stopMusicSound();
