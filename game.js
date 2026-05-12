@@ -479,6 +479,7 @@ function createGame() {
     screenShake: 0,
     message: "",
     messageTimer: 0,
+    messageDuration: 0,
     celebratedMilestones: [],
     lastObstacleId: "",
     lastAirThreatDistance: 0,
@@ -1277,8 +1278,7 @@ function maybeCelebrateDeliveryMilestone() {
     return false;
   }
   game.celebratedMilestones.push(milestone);
-  flashMessage(`${milestone} paket attın!`);
-  game.messageTimer = 2.45;
+  flashMessage(`${milestone} paket attın!`, 2.45);
   playSound("milestone");
   spawnConfetti(viewportWidth() / 2, viewportHeight() * 0.2, milestone >= 20 ? 42 : 28);
   game.screenShake = Math.max(game.screenShake, milestone >= 20 ? 0.14 : 0.08);
@@ -1398,9 +1398,10 @@ function obstacleHitbox(obstacle) {
   return { x: obstacle.x + 16, y: obstacle.y + 12, w: obstacle.w - 32, h: obstacle.h - 22 };
 }
 
-function flashMessage(text) {
+function flashMessage(text, duration = 1.8) {
   game.message = text;
-  game.messageTimer = 1.8;
+  game.messageTimer = duration;
+  game.messageDuration = duration;
 }
 
 function startCrash(obstacle = null) {
@@ -1767,8 +1768,11 @@ function drawScreenHud() {
     const width = banner.width;
     const x = screenW / 2 - width / 2;
     const y = banner.y;
-    ctx.globalAlpha = clamp(game.messageTimer, 0, 1);
-    drawMessageSign(x, y, width, banner.height, game.message, compact);
+    const duration = game.messageDuration || 1.8;
+    const life = clamp(game.messageTimer / duration, 0, 1);
+    const intro = clamp((duration - game.messageTimer) / 0.22, 0, 1);
+    const alpha = Math.min(intro, clamp(game.messageTimer / 0.28, 0, 1));
+    drawMessageToast(x, y + (1 - intro) * -8, width, banner.height, game.message, compact, alpha, life);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
@@ -1777,55 +1781,123 @@ function drawScreenHud() {
 function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
   if (mobileLandscape) {
     return {
-      width: clamp(screenW * 0.34, 178, 230),
-      height: clamp(screenH * 0.11, 28, 34),
-      y: clamp(screenH * 0.15, 34, 58),
+      width: clamp(screenW * 0.3, 156, 226),
+      height: clamp(screenH * 0.105, 28, 34),
+      y: clamp(screenH * 0.035, 10, 18),
     };
   }
   if (compact) {
     return {
-      width: Math.min(screenW * 0.72, 280),
-      height: 36,
-      y: Math.max(84, Math.round(screenH * 0.16)),
+      width: Math.min(screenW * 0.76, 286),
+      height: 38,
+      y: Math.max(88, Math.round(screenH * 0.15)),
     };
   }
   return {
-    width: 340,
-    height: 42,
-    y: Math.round(screenH * 0.14),
+    width: 320,
+    height: 40,
+    y: 74,
   };
 }
 
-function drawMessageSign(x, y, width, height, text, compact) {
+function drawMessageToast(x, y, width, height, text, compact, alpha, life) {
+  const type = messageType(text);
+  const palette = {
+    delivery: { accent: "#44d7b6", glow: "rgba(68, 215, 182, 0.34)", icon: "package" },
+    milestone: { accent: "#ffb238", glow: "rgba(255, 178, 56, 0.36)", icon: "star" },
+    danger: { accent: "#ff5b6e", glow: "rgba(255, 91, 110, 0.34)", icon: "crash" },
+    skill: { accent: "#65c7ff", glow: "rgba(101, 199, 255, 0.3)", icon: "spark" },
+  }[type];
+  const iconBox = height - 8;
+  const progressWidth = Math.max(0, (width - 16) * life);
+
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.34)";
-  ctx.shadowBlur = compact ? 10 : 18;
-  ctx.shadowOffsetY = compact ? 4 : 8;
-  roundRect(x, y, width, height, 8, "rgba(7, 13, 24, 0.78)", "rgba(255, 178, 56, 0.56)");
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = palette.glow;
+  ctx.shadowBlur = compact ? 9 : 14;
+  ctx.shadowOffsetY = compact ? 3 : 5;
+  roundRect(x, y, width, height, height / 2, "rgba(5, 10, 19, 0.76)", "rgba(255,255,255,0.16)");
   ctx.shadowColor = "transparent";
-  const accent = ctx.createLinearGradient(x, y, x + width, y);
-  accent.addColorStop(0, "#44d7b6");
-  accent.addColorStop(0.48, "#ffb238");
-  accent.addColorStop(1, "#ff7a2f");
-  ctx.fillStyle = accent;
-  roundRect(x + 7, y + 6, 4, height - 12, 999, accent);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-  roundRect(x + 16, y + 6, width - 24, height - 12, 6, "rgba(255, 255, 255, 0.08)");
-  ctx.fillStyle = "rgba(255, 178, 56, 0.22)";
-  ctx.beginPath();
-  ctx.arc(x + width - 18, y + height / 2, compact ? 5 : 7, 0, Math.PI * 2);
-  ctx.fill();
+  roundRect(x + 4, y + 4, iconBox, iconBox, iconBox / 2, "rgba(255,255,255,0.09)", palette.accent);
+  drawToastIcon(palette.icon, x + 4 + iconBox / 2, y + height / 2, iconBox * 0.55, palette.accent);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.09)";
+  roundRect(x + iconBox + 10, y + 7, width - iconBox - 18, height - 14, 999, "rgba(255, 255, 255, 0.09)");
+  ctx.fillStyle = palette.accent;
+  roundRect(x + 8, y + height - 4, progressWidth, 2, 999, palette.accent);
+
   ctx.fillStyle = "#f9fbff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  const fontSize = clamp(height * 0.36, compact ? 10 : 13, compact ? 12 : 15);
+  const fontSize = clamp(height * 0.34, compact ? 10 : 12, compact ? 12 : 14);
   ctx.font = `900 ${fontSize}px system-ui`;
-  const maxTextWidth = width - (compact ? 38 : 50);
+  const maxTextWidth = width - iconBox - 28;
   let label = text;
   while (ctx.measureText(label).width > maxTextWidth && label.length > 8) {
     label = `${label.slice(0, -2)}…`;
   }
-  ctx.fillText(label, x + (compact ? 20 : 24), y + height / 2 + 1);
+  ctx.fillText(label, x + iconBox + 16, y + height / 2 + 1);
+  ctx.restore();
+}
+
+function messageType(text) {
+  if (text.includes("Kaza")) return "danger";
+  if (text.includes("sıyrılma")) return "skill";
+  if (text.includes("paket attın")) return "milestone";
+  return "delivery";
+}
+
+function drawToastIcon(type, cx, cy, size, accent) {
+  ctx.save();
+  ctx.strokeStyle = accent;
+  ctx.fillStyle = accent;
+  ctx.lineWidth = Math.max(2, size * 0.14);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (type === "package") {
+    ctx.strokeRect(cx - size * 0.36, cy - size * 0.28, size * 0.72, size * 0.56);
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.36, cy - size * 0.1);
+    ctx.lineTo(cx, cy + size * 0.08);
+    ctx.lineTo(cx + size * 0.36, cy - size * 0.1);
+    ctx.stroke();
+  } else if (type === "star") {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 10;
+      const radius = i % 2 === 0 ? size * 0.44 : size * 0.2;
+      const px = cx + Math.cos(angle) * radius;
+      const py = cy + Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === "crash") {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size * 0.42);
+    ctx.lineTo(cx + size * 0.42, cy + size * 0.32);
+    ctx.lineTo(cx - size * 0.42, cy + size * 0.32);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size * 0.16);
+    ctx.lineTo(cx, cy + size * 0.08);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy + size * 0.22, size * 0.03, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(cx + size * 0.18, cy - size * 0.42);
+    ctx.lineTo(cx - size * 0.08, cy - size * 0.02);
+    ctx.lineTo(cx + size * 0.18, cy - size * 0.02);
+    ctx.lineTo(cx - size * 0.22, cy + size * 0.42);
+    ctx.lineTo(cx - size * 0.04, cy + size * 0.1);
+    ctx.lineTo(cx - size * 0.28, cy + size * 0.1);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
 }
 
