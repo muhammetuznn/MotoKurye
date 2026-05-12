@@ -1771,7 +1771,7 @@ function drawScreenHud() {
     const life = clamp(game.messageTimer / duration, 0, 1);
     const intro = clamp((duration - game.messageTimer) / 0.22, 0, 1);
     const alpha = Math.min(intro, clamp(game.messageTimer / 0.28, 0, 1));
-    drawMessageToast(x, y + (1 - intro) * -8, width, banner.height, game.message, compact, alpha, life);
+    drawMessageToast(x, y + (1 - intro) * -6, width, banner.height, game.message, compact, mobileLandscape, alpha, life);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
@@ -1780,9 +1780,9 @@ function drawScreenHud() {
 function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
   if (mobileLandscape) {
     return {
-      width: clamp(screenW * 0.3, 156, 226),
-      height: clamp(screenH * 0.105, 28, 34),
-      y: clamp(screenH * 0.035, 10, 18),
+      width: clamp(screenW * 0.28, 148, 204),
+      height: clamp(screenH * 0.09, 28, 32),
+      y: clamp(screenH * 0.075, 24, 34),
     };
   }
   if (compact) {
@@ -1799,43 +1799,43 @@ function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
   };
 }
 
-function drawMessageToast(x, y, width, height, text, compact, alpha, life) {
+function drawMessageToast(x, y, width, height, text, compact, mobileLandscape, alpha, life) {
   const type = messageType(text);
   const palette = {
-    delivery: { accent: "#44d7b6", glow: "rgba(68, 215, 182, 0.34)", icon: "package" },
-    milestone: { accent: "#ffb238", glow: "rgba(255, 178, 56, 0.36)", icon: "star" },
-    danger: { accent: "#ff5b6e", glow: "rgba(255, 91, 110, 0.34)", icon: "crash" },
-    skill: { accent: "#65c7ff", glow: "rgba(101, 199, 255, 0.3)", icon: "spark" },
+    delivery: { accent: "#44d7b6", fill: "rgba(9, 36, 34, 0.72)", glow: "rgba(68, 215, 182, 0.28)", icon: "package" },
+    milestone: { accent: "#ffb238", fill: "rgba(42, 27, 7, 0.74)", glow: "rgba(255, 178, 56, 0.32)", icon: "star" },
+    danger: { accent: "#ff5b6e", fill: "rgba(41, 9, 16, 0.76)", glow: "rgba(255, 91, 110, 0.3)", icon: "crash" },
+    skill: { accent: "#65c7ff", fill: "rgba(8, 26, 45, 0.72)", glow: "rgba(101, 199, 255, 0.26)", icon: "spark" },
   }[type];
-  const iconBox = height - 8;
+  const label = messageLabel(text, mobileLandscape);
+  const iconBox = height - 6;
   const progressWidth = Math.max(0, (width - 16) * life);
 
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = compact ? 9 : 14;
-  ctx.shadowOffsetY = compact ? 3 : 5;
-  roundRect(x, y, width, height, height / 2, "rgba(5, 10, 19, 0.76)", "rgba(255,255,255,0.16)");
+  ctx.shadowBlur = compact ? 8 : 12;
+  ctx.shadowOffsetY = compact ? 2 : 4;
+  roundRect(x, y, width, height, height / 2, palette.fill, "rgba(255,255,255,0.12)");
   ctx.shadowColor = "transparent";
-  roundRect(x + 4, y + 4, iconBox, iconBox, iconBox / 2, "rgba(255,255,255,0.09)", palette.accent);
-  drawToastIcon(palette.icon, x + 4 + iconBox / 2, y + height / 2, iconBox * 0.55, palette.accent);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  roundRect(x + 3, y + 3, iconBox, iconBox, iconBox / 2, "rgba(255,255,255,0.08)", palette.accent);
+  drawToastIcon(palette.icon, x + 3 + iconBox / 2, y + height / 2, iconBox * 0.54, palette.accent);
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.09)";
-  roundRect(x + iconBox + 10, y + 7, width - iconBox - 18, height - 14, 999, "rgba(255, 255, 255, 0.09)");
   ctx.fillStyle = palette.accent;
-  roundRect(x + 8, y + height - 4, progressWidth, 2, 999, palette.accent);
+  roundRect(x + 8, y + height - 3, progressWidth, 2, 999, palette.accent);
 
   ctx.fillStyle = "#f9fbff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  const fontSize = clamp(height * 0.34, compact ? 10 : 12, compact ? 12 : 14);
+  const fontSize = clamp(height * 0.35, compact ? 10 : 12, compact ? 12 : 14);
   ctx.font = `900 ${fontSize}px system-ui`;
   const maxTextWidth = width - iconBox - 28;
-  let label = text;
-  while (ctx.measureText(label).width > maxTextWidth && label.length > 8) {
-    label = `${label.slice(0, -2)}…`;
+  let fittedLabel = label;
+  while (ctx.measureText(fittedLabel).width > maxTextWidth && fittedLabel.length > 8) {
+    fittedLabel = `${fittedLabel.slice(0, -2)}…`;
   }
-  ctx.fillText(label, x + iconBox + 16, y + height / 2 + 1);
+  ctx.fillText(fittedLabel, x + iconBox + 13, y + height / 2 + 1);
   ctx.restore();
 }
 
@@ -1844,6 +1844,18 @@ function messageType(text) {
   if (text.includes("sıyrılma")) return "skill";
   if (text.includes("paket attın")) return "milestone";
   return "delivery";
+}
+
+function messageLabel(text, mobileLandscape) {
+  if (!mobileLandscape) return text;
+  if (text.includes("Teslimat tamam")) {
+    const coinMatch = text.match(/\+\d+\s*coin/);
+    return coinMatch ? `Teslimat ${coinMatch[0].replace(" coin", "")}` : "Teslimat";
+  }
+  if (text.includes("Teslimat noktası")) return "Paket noktası";
+  if (text.includes("Yakın sıyrılma")) return "Sıyrılma +2";
+  if (text.includes("Kaza")) return "Kaza";
+  return text.replace(" attın", "");
 }
 
 function drawToastIcon(type, cx, cy, size, accent) {
