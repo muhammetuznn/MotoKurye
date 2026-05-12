@@ -862,4 +862,70 @@ h2 {
   .screen {
     padding: 12px;
   }
+
+  .panel.compact.game-over-panel {
+    display: grid;
+    grid-template-columns: minmax(210px, 1fr) minmax(180px, 0.8fr);
+    grid-auto-rows: min-content;
+    gap: 7px 16px;
+    align-items: center;
+    width: min(720px, calc(100vw - 28px));
+    max-height: calc(var(--app-height, 100dvh) - 24px);
+    margin-top: 0;
+    padding: 14px;
+  }
+
+  .game-over-panel .kicker {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    font-size: 0.66rem;
+  }
+
+  .game-over-panel h2 {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: clamp(1.5rem, 5vw, 2.35rem);
+  }
+
+  .game-over-panel .stat-row {
+    grid-column: 1;
+    min-height: 32px;
+    font-size: 0.86rem;
+  }
+
+  .game-over-panel .stat-row:nth-of-type(1) {
+    grid-row: 3;
+  }
+
+  .game-over-panel .stat-row:nth-of-type(2) {
+    grid-row: 4;
+  }
+
+  .game-over-panel .stat-row:nth-of-type(3) {
+    grid-row: 5;
+  }
+
+  .game-over-panel .primary,
+  .game-over-panel .secondary,
+  .game-over-panel .ghost {
+    grid-column: 2;
+    width: 100%;
+    min-height: 38px;
+    margin-top: 0;
+    padding: 0 12px;
+    font-size: 0.9rem;
+  }
+
+  .game-over-panel .primary {
+    grid-row: 2;
+  }
+
+  .game-over-panel .secondary {
+    grid-row: 3;
+  }
+
+  .game-over-panel .ghost {
+    grid-row: 4;
+  }
 }

@@ -58,7 +58,6 @@ const assets = loadAssets({
   cat: "Asssets/kedi.png",
   pothole: "Asssets/cukur.png",
   barrier: "Asssets/zabıta.png",
-  bump: "Asssets/tümsek.png",
   trash: "Asssets/cöpkovasi.png",
   delivery: "Asssets/teslimat.png",
   cloud: "Asssets/bulut.png",
@@ -299,7 +298,6 @@ const obstacleTypes = [
   { id: "cat", label: "Kedi", asset: "cat", w: 104, h: 66, jumper: true, minDistance: 240, damage: true },
   { id: "pothole", label: "Çukur", asset: "pothole", w: 112, h: 48, ground: true, minDistance: 0, damage: true },
   { id: "barrier", label: "Zabıta", asset: "barrier", w: 128, h: 82, ground: true, minDistance: 170, damage: true },
-  { id: "bump", label: "Kasis", asset: "bump", w: 118, h: 36, ground: true, minDistance: 0, damage: true },
   { id: "trash", label: "Çöp Kovası", asset: "trash", w: 74, h: 82, ground: true, minDistance: 360, damage: true },
   { id: "cloud", label: "Yağmur", asset: "cloud", w: 132, h: 96, air: true, minDistance: 480, damage: false },
 ];
@@ -458,6 +456,7 @@ function createGame() {
     message: "",
     messageTimer: 0,
     lastObstacleId: "",
+    lastAirThreatDistance: 0,
     nearMisses: 0,
   };
 }
@@ -1064,7 +1063,16 @@ function spawnObstacle() {
   if (game.distance < 650) {
     available = available.filter((item) => item.id !== "cloud" && item.id !== game.lastObstacleId);
   }
-  const type = available[Math.floor(Math.random() * available.length)];
+  const seagull = available.find((item) => item.id === "seagull");
+  const needsAirThreat = seagull && game.distance > 420 && game.distance - game.lastAirThreatDistance > 620;
+  const weighted = [];
+  for (const item of available) {
+    const weight = item.id === "seagull" ? 3 : item.id === "cloud" ? 1 : 2;
+    for (let i = 0; i < weight; i += 1) {
+      weighted.push(item);
+    }
+  }
+  const type = needsAirThreat ? seagull : weighted[Math.floor(Math.random() * weighted.length)];
   let y = groundObstacleY(type);
   let wave = 0;
   if (type.air) {
@@ -1074,6 +1082,9 @@ function spawnObstacle() {
   const jumpSpeed = type.jumper ? random(0.92, 1.2) : 0;
   const jumpHeight = type.jumper ? random(82, 118) : 0;
   const jumpTime = type.jumper ? random(0.05, 0.28) : 0;
+  if (type.id === "seagull") {
+    game.lastAirThreatDistance = game.distance;
+  }
   game.lastObstacleId = type.id;
   game.obstacles.push({
     ...type,
@@ -1093,7 +1104,6 @@ function spawnObstacle() {
 
 function groundObstacleY(type) {
   if (type.id === "pothole") return WORLD.roadY - type.h + 12;
-  if (type.id === "bump") return WORLD.roadY - type.h + 4;
   if (type.id === "cat") return WORLD.roadY - type.h - 6;
   if (type.id === "barrier") return WORLD.roadY - type.h - 2;
   if (type.id === "trash") return WORLD.roadY - type.h - 2;
@@ -1277,9 +1287,6 @@ function getPlayerBox() {
 function obstacleHitbox(obstacle) {
   if (obstacle.id === "pothole") {
     return { x: obstacle.x + 24, y: WORLD.roadY - 18, w: obstacle.w - 48, h: 22 };
-  }
-  if (obstacle.id === "bump") {
-    return { x: obstacle.x + 18, y: WORLD.roadY - 26, w: obstacle.w - 36, h: 26 };
   }
   if (obstacle.id === "door") {
     return { x: obstacle.x + 58, y: obstacle.y + 38, w: obstacle.w - 78, h: obstacle.h - 44 };
@@ -2157,9 +2164,6 @@ function drawObstacles() {
       case "barrier":
         drawBarrier(obstacle);
         break;
-      case "bump":
-        drawBump(obstacle);
-        break;
       default:
         roundRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h, 8, "#ff5b6e");
     }
@@ -2286,18 +2290,6 @@ function drawBarrier(o) {
   ctx.font = "900 11px system-ui";
   ctx.textAlign = "center";
   ctx.fillText("ZABITA", o.x + o.w / 2, o.y + 38);
-}
-
-function drawBump(o) {
-  ctx.fillStyle = "#d6a650";
-  ctx.beginPath();
-  ctx.moveTo(o.x, o.y + o.h);
-  ctx.quadraticCurveTo(o.x + o.w / 2, o.y - 6, o.x + o.w, o.y + o.h);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "#111827";
-  ctx.lineWidth = 3;
-  ctx.stroke();
 }
 
 function drawParticles() {
