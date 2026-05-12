@@ -20,6 +20,7 @@ html,
 body {
   width: 100%;
   height: 100%;
+  height: var(--app-height, 100dvh);
   margin: 0;
   overflow: hidden;
   background: #050915;
@@ -50,7 +51,7 @@ button:hover {
 .app-shell {
   position: relative;
   width: 100vw;
-  height: 100vh;
+  height: var(--app-height, 100dvh);
   min-height: 520px;
   overflow: hidden;
 }
@@ -343,6 +344,11 @@ h2 {
   max-width: 280px;
   color: var(--muted);
   line-height: 1.4;
+}
+
+.orientation-card .ghost {
+  margin: 18px auto 0;
+  max-width: 220px;
 }
 
 .phone-turn {
@@ -836,5 +842,24 @@ h2 {
   .motor-preview,
   .city-preview {
     height: 94px;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+  .app-shell {
+    min-height: 0;
+  }
+
+  .settings-button {
+    top: auto;
+    right: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .screen {
+    padding: 12px;
   }
 }

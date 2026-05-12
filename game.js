@@ -34,6 +34,7 @@ const ui = {
   goShopBtn: document.getElementById("goShopBtn"),
   backMenuBtn: document.getElementById("backMenuBtn"),
   orientationPanel: document.getElementById("orientationPanel"),
+  portraitStartBtn: document.getElementById("portraitStartBtn"),
 };
 
 
@@ -48,6 +49,7 @@ const WORLD = {
   maxFall: 620,
   startSpeed: 205,
 };
+const MAX_PARTICLES = 130;
 
 const assets = loadAssets({
   courier: "Asssets/kurye.png",
@@ -73,7 +75,7 @@ const motorAssets = loadAssets({
   motor8: "Asssets/motors/motor-08.png",
   motor9: "Asssets/motors/motor-09.png",
   motor10: "Asssets/motors/motor-10.png",
-});
+}, { removeBackground: true, tolerance: 58 });
 
 const cityAssets = loadAssets({
   istanbul: "Asssets/cities/istanbul.png",
@@ -315,6 +317,7 @@ let audioUnlocked = false;
 let engineAudio = null;
 let musicAudio = null;
 let pendingLandscapeStart = false;
+const cityBackgroundCache = new Map();
 let camera = {
   scale: 1,
   offsetX: 0,
@@ -459,11 +462,14 @@ function createGame() {
   };
 }
 
-function loadAssets(manifest) {
+function loadAssets(manifest, options = {}) {
   const loaded = {};
   for (const [key, source] of Object.entries(manifest)) {
     const image = new Image();
     image.onload = () => {
+      if (options.removeBackground) {
+        prepareTransparentAsset(image, options.tolerance || 52);
+      }
       if (state !== "playing" && ui.shopItems) renderShop();
     };
     image.onerror = () => {
@@ -475,21 +481,132 @@ function loadAssets(manifest) {
   return loaded;
 }
 
+function prepareTransparentAsset(image, tolerance) {
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (!width || !height) return;
+  const work = document.createElement("canvas");
+  work.width = width;
+  work.height = height;
+  const workCtx = work.getContext("2d", { willReadFrequently: true });
+  workCtx.drawImage(image, 0, 0);
+  let pixels;
+  try {
+    pixels = workCtx.getImageData(0, 0, width, height);
+  } catch {
+    return;
+  }
+  const data = pixels.data;
+  const edgeColor = averageEdgeColor(data, width, height);
+  const visited = new Uint8Array(width * height);
+  const stack = [];
+  const pushIfBackground = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const point = y * width + x;
+    if (visited[point]) return;
+    const index = point * 4;
+    if (data[index + 3] < 8 || colorDistance(data, index, edgeColor) <= tolerance) {
+      visited[point] = 1;
+      stack.push(point);
+    }
+  };
+  for (let x = 0; x < width; x += 1) {
+    pushIfBackground(x, 0);
+    pushIfBackground(x, height - 1);
+  }
+  for (let y = 0; y < height; y += 1) {
+    pushIfBackground(0, y);
+    pushIfBackground(width - 1, y);
+  }
+  while (stack.length) {
+    const point = stack.pop();
+    const x = point % width;
+    const y = Math.floor(point / width);
+    const index = point * 4;
+    const distance = colorDistance(data, index, edgeColor);
+    data[index + 3] = distance > tolerance - 10 ? Math.min(data[index + 3], 72) : 0;
+    pushIfBackground(x + 1, y);
+    pushIfBackground(x - 1, y);
+    pushIfBackground(x, y + 1);
+    pushIfBackground(x, y - 1);
+  }
+  softenTransparentEdges(data, width, height);
+  workCtx.putImageData(pixels, 0, 0);
+  image.processedCanvas = work;
+  image.processedSrc = work.toDataURL("image/png");
+}
+
+function averageEdgeColor(data, width, height) {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let count = 0;
+  const add = (x, y) => {
+    const index = (y * width + x) * 4;
+    if (data[index + 3] < 16) return;
+    r += data[index];
+    g += data[index + 1];
+    b += data[index + 2];
+    count += 1;
+  };
+  for (let x = 0; x < width; x += 1) {
+    add(x, 0);
+    add(x, height - 1);
+  }
+  for (let y = 0; y < height; y += 1) {
+    add(0, y);
+    add(width - 1, y);
+  }
+  return count ? [r / count, g / count, b / count] : [255, 255, 255];
+}
+
+function colorDistance(data, index, color) {
+  const dr = data[index] - color[0];
+  const dg = data[index + 1] - color[1];
+  const db = data[index + 2] - color[2];
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function softenTransparentEdges(data, width, height) {
+  const alpha = new Uint8ClampedArray(width * height);
+  for (let i = 0; i < alpha.length; i += 1) {
+    alpha[i] = data[i * 4 + 3];
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const point = y * width + x;
+      const index = point * 4;
+      if (alpha[point] === 0) continue;
+      const hasTransparentNeighbor =
+        alpha[point - 1] === 0 ||
+        alpha[point + 1] === 0 ||
+        alpha[point - width] === 0 ||
+        alpha[point + width] === 0;
+      if (hasTransparentNeighbor) {
+        data[index + 3] = Math.min(data[index + 3], 205);
+      }
+    }
+  }
+}
+
 function resizeCanvas() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.floor(window.innerWidth * dpr);
-  canvas.height = Math.floor(window.innerHeight * dpr);
-  canvas.style.width = `${window.innerWidth}px`;
-  canvas.style.height = `${window.innerHeight}px`;
+  const width = viewportWidth();
+  const height = viewportHeight();
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function toWorldX(x) {
-  return (x / window.innerWidth) * WORLD.width;
+  return (x / viewportWidth()) * WORLD.width;
 }
 
 function toWorldY(y) {
-  return (y / window.innerHeight) * WORLD.height;
+  return (y / viewportHeight()) * WORLD.height;
 }
 
 function showScreen(name) {
@@ -522,6 +639,7 @@ function startGame() {
 function beginGame() {
   pendingLandscapeStart = false;
   ui.orientationPanel.classList.remove("is-visible");
+  requestMobileFullscreen();
   game = createGame();
   inputDown = false;
   closeSettings();
@@ -531,15 +649,47 @@ function beginGame() {
   startMusicSound();
 }
 
+function beginPortraitGame() {
+  pendingLandscapeStart = false;
+  ui.orientationPanel.classList.remove("is-visible");
+  beginGame();
+}
+
 function shouldPromptLandscape() {
-  const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-  return coarsePointer && window.innerWidth < 820 && window.innerHeight > window.innerWidth;
+  return isMobileLike() && viewportWidth() < 820 && viewportHeight() > viewportWidth();
 }
 
 function handleViewportChange() {
   resizeCanvas();
   if (pendingLandscapeStart && !shouldPromptLandscape()) {
     beginGame();
+  }
+}
+
+function viewportWidth() {
+  return Math.floor(window.visualViewport?.width || window.innerWidth);
+}
+
+function viewportHeight() {
+  return Math.floor(window.visualViewport?.height || window.innerHeight);
+}
+
+function isMobileLike() {
+  return Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+}
+
+function isMobileLandscape() {
+  return isMobileLike() && viewportWidth() > viewportHeight();
+}
+
+function requestMobileFullscreen() {
+  if (!isMobileLike() || document.fullscreenElement) return;
+  const target = document.documentElement;
+  if (target.requestFullscreen) {
+    target.requestFullscreen().catch(() => {});
+  }
+  if (screen.orientation?.lock) {
+    screen.orientation.lock("landscape").catch(() => {});
   }
 }
 
@@ -605,7 +755,7 @@ function renderShop() {
     card.className = `shop-card${unlocked ? "" : " is-locked"}`;
     const asset = motorAssets[motor.asset];
     const preview = asset && asset.complete && asset.naturalWidth > 0
-      ? `<img src="${asset.src}" alt="">`
+      ? `<img src="${asset.processedSrc || asset.src}" alt="">`
       : `<div class="placeholder-bike" style="background: linear-gradient(135deg, ${motor.color}, ${motor.accent});"></div>`;
     const progress = motor.unlockPackages === 0 ? 100 : clamp((save.bestPackages / motor.unlockPackages) * 100, 0, 100);
     const remaining = Math.max(0, motor.unlockPackages - save.bestPackages);
@@ -1236,6 +1386,9 @@ function spawnCrashDust(x, y, count) {
 }
 
 function updateParticles(dt) {
+  if (game.particles.length > MAX_PARTICLES) {
+    game.particles.splice(0, game.particles.length - MAX_PARTICLES);
+  }
   for (const particle of game.particles) {
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
@@ -1274,10 +1427,12 @@ function updateIconBursts(dt) {
 
 function render() {
   camera = computeCamera();
+  const screenW = viewportWidth();
+  const screenH = viewportHeight();
   ctx.save();
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.clearRect(0, 0, screenW, screenH);
   ctx.fillStyle = "#071327";
-  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.fillRect(0, 0, screenW, screenH);
   if (game.screenShake > 0) {
     const shake = game.screenShake * 18;
     ctx.translate(random(-shake, shake), random(-shake, shake));
@@ -1290,15 +1445,21 @@ function render() {
 }
 
 function computeCamera() {
-  const screenW = window.innerWidth;
-  const screenH = window.innerHeight;
+  const screenW = viewportWidth();
+  const screenH = viewportHeight();
   const aspect = screenW / screenH;
   const fitScale = Math.min(screenW / WORLD.width, screenH / WORLD.height);
   let scale = fitScale;
   let offsetX = (screenW - WORLD.width * scale) / 2;
   let offsetY = (screenH - WORLD.height * scale) / 2;
 
-  if (aspect < 1.2) {
+  if (isMobileLandscape()) {
+    scale = Math.max(screenW / WORLD.width, screenH / WORLD.height);
+    offsetX = screenW * 0.25 - game.player.x * scale;
+    offsetX = clamp(offsetX, screenW - WORLD.width * scale, 0);
+    offsetY = screenH * 0.78 - WORLD.roadY * scale;
+    offsetY = clamp(offsetY, screenH - WORLD.height * scale, 0);
+  } else if (aspect < 1.2) {
     const targetViewW = aspect < 0.8 ? 460 : 560;
     scale = Math.min(screenH / (WORLD.height * 1.02), screenW / targetViewW);
     const playerScreenX = 0.28;
@@ -1345,13 +1506,11 @@ function drawBackground() {
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
 
   ctx.save();
-  ctx.filter = "blur(1px) saturate(0.84) brightness(0.8)";
   const asset = cityAssets[city.asset];
   if (asset && asset.complete && asset.naturalWidth > 0) {
-    ctx.globalAlpha = 0.82;
-    ctx.drawImage(asset, 0, 0, WORLD.width, WORLD.height);
-    ctx.globalAlpha = 1;
+    ctx.drawImage(getCachedCityBackground(city, asset), 0, 0);
   } else {
+    ctx.filter = "blur(1px) saturate(0.84) brightness(0.8)";
     drawSkyMarker(city);
     drawCityLayer(0.18, 265, city.far, city.id === "mexicoCity" ? 52 : 70, city);
     drawCityLayer(0.36, 330, city.near, city.id === "mexicoCity" ? 72 : 92, city);
@@ -1364,6 +1523,23 @@ function drawBackground() {
   ctx.fillStyle = focusShade;
   ctx.fillRect(0, 0, WORLD.width, WORLD.roadY + 8);
   drawRainReflections(city);
+}
+
+function getCachedCityBackground(city, asset) {
+  const key = `${city.id}:${asset.src}:${asset.naturalWidth}x${asset.naturalHeight}`;
+  const cached = cityBackgroundCache.get(key);
+  if (cached) return cached;
+  const buffer = document.createElement("canvas");
+  buffer.width = WORLD.width;
+  buffer.height = WORLD.height;
+  const bufferCtx = buffer.getContext("2d");
+  bufferCtx.filter = "blur(1px) saturate(0.84) brightness(0.8)";
+  bufferCtx.globalAlpha = 0.82;
+  bufferCtx.drawImage(asset, 0, 0, WORLD.width, WORLD.height);
+  bufferCtx.globalAlpha = 1;
+  bufferCtx.filter = "none";
+  cityBackgroundCache.set(key, buffer);
+  return buffer;
 }
 
 function drawSkyMarker(city) {
@@ -1449,31 +1625,34 @@ function drawRoad() {
 function drawScreenHud() {
   if (state !== "playing") return;
   ctx.save();
-  const compact = window.innerWidth < 560;
+  const screenW = viewportWidth();
+  const screenH = viewportHeight();
+  const mobileLandscape = isMobileLandscape();
+  const compact = screenW < 560 || mobileLandscape;
   const pad = compact ? 10 : 18;
-  const top = compact ? 10 : 16;
-  const pillH = compact ? 34 : 42;
-  const gap = compact ? 8 : 10;
+  const top = compact ? Math.max(8, Math.round(screenH * 0.025)) : 16;
+  const pillH = compact ? 32 : 42;
+  const gap = compact ? 7 : 10;
 
   if (compact) {
     drawMetricPill(pad, top, 134, pillH, "distance", `${Math.floor(game.distance)} m`);
-    drawSpeedGauge(window.innerWidth - pad - 112, top, 112, pillH, currentSpeedKmh(), true);
+    drawSpeedGauge(screenW - pad - 112, top, 112, pillH, currentSpeedKmh(), true);
     drawMetricPill(pad, top + pillH + gap, 102, pillH, "package", game.deliveries, "#ffb238");
-    drawMetricPill(window.innerWidth - pad - 94, top + pillH + gap, 94, pillH, "coin", game.runCoins, "#ffd166");
+    drawMetricPill(screenW - pad - 94, top + pillH + gap, 94, pillH, "coin", game.runCoins, "#ffd166");
     drawScreenPowerHud(pad, top + (pillH + gap) * 2);
   } else {
     drawMetricPill(18, 16, 178, 42, "distance", `${Math.floor(game.distance)} m`);
-    drawSpeedGauge(window.innerWidth / 2 - 88, 12, 176, 52, currentSpeedKmh(), false);
-    drawMetricPill(window.innerWidth - 302, 16, 122, 42, "package", game.deliveries, "#ffb238");
-    drawMetricPill(window.innerWidth - 164, 16, 146, 42, "coin", game.runCoins, "#ffd166");
+    drawSpeedGauge(screenW / 2 - 88, 12, 176, 52, currentSpeedKmh(), false);
+    drawMetricPill(screenW - 302, 16, 122, 42, "package", game.deliveries, "#ffb238");
+    drawMetricPill(screenW - 164, 16, 146, 42, "coin", game.runCoins, "#ffd166");
     drawScreenPowerHud(18, 66);
   }
 
   if (game.messageTimer > 0) {
-    const width = compact ? Math.min(window.innerWidth - 24, 300) : 300;
-    const x = window.innerWidth / 2 - width / 2;
+    const width = compact ? Math.min(screenW - 24, 290) : 300;
+    const x = screenW / 2 - width / 2;
     const hudBottom = compact ? top + (pillH + gap) * 3 : 66;
-    const y = Math.min(window.innerHeight * 0.28, hudBottom + (compact ? 8 : 10));
+    const y = Math.min(screenH * 0.3, hudBottom + (compact ? 8 : 10));
     ctx.globalAlpha = clamp(game.messageTimer, 0, 1);
     drawMessageSign(x, y, width, compact ? 40 : 44, game.message, compact);
     ctx.globalAlpha = 1;
@@ -1531,7 +1710,7 @@ function drawMetricPill(x, y, w, h, icon, value, accent) {
   const iconSize = h - 14;
   drawHudIcon(icon, x + 18, y + h / 2, iconSize, accent);
   ctx.fillStyle = "#f9fbff";
-  ctx.font = `900 ${window.innerWidth < 560 ? 14 : 18}px system-ui`;
+  ctx.font = `900 ${viewportWidth() < 560 || isMobileLandscape() ? 14 : 18}px system-ui`;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillText(String(value), x + 34, y + h / 2 + 1);
@@ -1834,7 +2013,7 @@ function drawPlayer() {
   const selectedMotorAsset = motorAssets[motor.asset];
   const hasSelectedMotorAsset = selectedMotorAsset && selectedMotorAsset.complete && selectedMotorAsset.naturalWidth > 0;
   if (hasSelectedMotorAsset) {
-    ctx.drawImage(selectedMotorAsset, -22, -16, 178, 120);
+    ctx.drawImage(renderSource(selectedMotorAsset), -22, -16, 178, 120);
   } else if (!drawAsset("courier", -10, -20, 158, 132)) {
     drawFallbackCourier(motor);
   }
@@ -2171,8 +2350,12 @@ function drawAsset(name, x, y, w, h) {
   if (!image || !image.complete || image.naturalWidth === 0) {
     return false;
   }
-  ctx.drawImage(image, x, y, w, h);
+  ctx.drawImage(renderSource(image), x, y, w, h);
   return true;
+}
+
+function renderSource(image) {
+  return image.processedCanvas || image;
 }
 
 function random(min, max) {
@@ -2524,6 +2707,7 @@ bindButton(ui.closeShopBtn, () => showScreen("menu"));
 bindButton(ui.backMenuBtn, () => showScreen("menu"));
 bindButton(ui.settingsBtn, openSettings);
 bindButton(ui.closeSettingsBtn, closeSettings);
+bindButton(ui.portraitStartBtn, beginPortraitGame, "start");
 ui.settingsPanel.addEventListener("click", (event) => {
   if (event.target === ui.settingsPanel) closeSettings();
 });
@@ -2581,6 +2765,8 @@ window.addEventListener("keyup", (event) => {
 });
 window.addEventListener("resize", handleViewportChange);
 window.addEventListener("orientationchange", handleViewportChange);
+window.visualViewport?.addEventListener("resize", handleViewportChange);
+window.visualViewport?.addEventListener("scroll", handleViewportChange);
 window.addEventListener("blur", () => {
   stopEngineSound();
   stopMusicSound();
