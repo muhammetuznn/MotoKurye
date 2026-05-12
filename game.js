@@ -193,8 +193,8 @@ const motors = [
     id: "motor2",
     asset: "motor2",
     name: "Eski Kurye Motoru",
-    unlockPackages: 5,
-    price: 500,
+    unlockPackages: 4,
+    price: 750,
     desc: "İlk ciddi teslimat hedefinden sonra açılır.",
     color: "#78a083",
     accent: "#e5b45c",
@@ -205,8 +205,8 @@ const motors = [
     id: "motor3",
     asset: "motor3",
     name: "Neon Gece Motoru",
-    unlockPackages: 12,
-    price: 1250,
+    unlockPackages: 8,
+    price: 1600,
     desc: "Gece temposu için hızlı ama hassas.",
     color: "#2de2e6",
     accent: "#f6019d",
@@ -217,8 +217,8 @@ const motors = [
     id: "motor4",
     asset: "motor4",
     name: "Altın Paket Motoru",
-    unlockPackages: 20,
-    price: 2500,
+    unlockPackages: 14,
+    price: 3000,
     desc: "Daha yüksek hız, daha iyi ivme.",
     color: "#f6c84c",
     accent: "#fff0a6",
@@ -229,8 +229,8 @@ const motors = [
     id: "motor5",
     asset: "motor5",
     name: "Sahil Motoru",
-    unlockPackages: 32,
-    price: 4500,
+    unlockPackages: 22,
+    price: 5200,
     desc: "Yumuşak kontrol, orta hız.",
     color: "#44d7b6",
     accent: "#65c7ff",
@@ -241,8 +241,8 @@ const motors = [
     id: "motor6",
     asset: "motor6",
     name: "Sanayi Canavarı",
-    unlockPackages: 48,
-    price: 7500,
+    unlockPackages: 34,
+    price: 8500,
     desc: "Ağır ama güçlü çıkış verir.",
     color: "#9ca3af",
     accent: "#ffb238",
@@ -253,8 +253,8 @@ const motors = [
     id: "motor7",
     asset: "motor7",
     name: "Gece Roketi",
-    unlockPackages: 70,
-    price: 12000,
+    unlockPackages: 50,
+    price: 13500,
     desc: "Hızlı koşular için agresif seçim.",
     color: "#8b5cf6",
     accent: "#f6019d",
@@ -265,8 +265,8 @@ const motors = [
     id: "motor8",
     asset: "motor8",
     name: "Yağmur Kaçkını",
-    unlockPackages: 95,
-    price: 18000,
+    unlockPackages: 70,
+    price: 20000,
     desc: "Yağmurda daha az hız kaybeder.",
     color: "#2563eb",
     accent: "#93c5fd",
@@ -278,8 +278,8 @@ const motors = [
     id: "motor9",
     asset: "motor9",
     name: "Turbo Paket",
-    unlockPackages: 125,
-    price: 28000,
+    unlockPackages: 95,
+    price: 30000,
     desc: "Turbo etkisini daha iyi taşır.",
     color: "#f97316",
     accent: "#fde047",
@@ -291,8 +291,8 @@ const motors = [
     id: "motor10",
     asset: "motor10",
     name: "Efsane Kurye",
-    unlockPackages: 160,
-    price: 50000,
+    unlockPackages: 125,
+    price: 48000,
     desc: "En üst seviye hız ve güç.",
     color: "#f6c84c",
     accent: "#ffffff",
@@ -1762,11 +1762,11 @@ function drawScreenHud() {
   }
 
   if (game.messageTimer > 0) {
-    const width = compact ? Math.min(screenW - 28, 330) : 340;
+    const width = compact ? Math.min(screenW * 0.58, 270) : 340;
     const x = screenW / 2 - width / 2;
-    const y = Math.max(top + pillH + 12, Math.round(screenH * 0.16));
+    const y = compact ? Math.max(top + pillH + 8, Math.round(screenH * 0.11)) : Math.round(screenH * 0.14);
     ctx.globalAlpha = clamp(game.messageTimer, 0, 1);
-    drawMessageSign(x, y, width, compact ? 38 : 42, game.message, compact);
+    drawMessageSign(x, y, width, compact ? 34 : 42, game.message, compact);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
@@ -1775,32 +1775,32 @@ function drawScreenHud() {
 function drawMessageSign(x, y, width, height, text, compact) {
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.34)";
-  ctx.shadowBlur = 18;
-  ctx.shadowOffsetY = 8;
-  roundRect(x, y, width, height, 8, "rgba(7, 13, 24, 0.84)", "rgba(255, 178, 56, 0.62)");
+  ctx.shadowBlur = compact ? 10 : 18;
+  ctx.shadowOffsetY = compact ? 4 : 8;
+  roundRect(x, y, width, height, 8, "rgba(7, 13, 24, 0.78)", "rgba(255, 178, 56, 0.56)");
   ctx.shadowColor = "transparent";
   const accent = ctx.createLinearGradient(x, y, x + width, y);
   accent.addColorStop(0, "#44d7b6");
   accent.addColorStop(0.48, "#ffb238");
   accent.addColorStop(1, "#ff7a2f");
   ctx.fillStyle = accent;
-  roundRect(x + 8, y + 7, 5, height - 14, 999, accent);
+  roundRect(x + 7, y + 6, 4, height - 12, 999, accent);
   ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-  roundRect(x + 18, y + 7, width - 26, height - 14, 6, "rgba(255, 255, 255, 0.08)");
+  roundRect(x + 16, y + 6, width - 24, height - 12, 6, "rgba(255, 255, 255, 0.08)");
   ctx.fillStyle = "rgba(255, 178, 56, 0.22)";
   ctx.beginPath();
-  ctx.arc(x + width - 20, y + height / 2, 7, 0, Math.PI * 2);
+  ctx.arc(x + width - 18, y + height / 2, compact ? 5 : 7, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#f9fbff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.font = `900 ${compact ? 13 : 15}px system-ui`;
-  const maxTextWidth = width - 50;
+  ctx.font = `900 ${compact ? 12 : 15}px system-ui`;
+  const maxTextWidth = width - (compact ? 42 : 50);
   let label = text;
   while (ctx.measureText(label).width > maxTextWidth && label.length > 8) {
     label = `${label.slice(0, -2)}…`;
   }
-  ctx.fillText(label, x + 24, y + height / 2 + 1);
+  ctx.fillText(label, x + (compact ? 20 : 24), y + height / 2 + 1);
   ctx.restore();
 }
 

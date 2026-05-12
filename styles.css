@@ -611,6 +611,64 @@ h2 {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.shop-card.is-locked .motor-preview::before,
+.shop-card.is-locked .city-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 91, 110, 0.34), rgba(255, 91, 110, 0.16) 42%, rgba(26, 7, 13, 0.62)),
+    rgba(255, 91, 110, 0.22);
+  backdrop-filter: blur(3px) saturate(0.78);
+}
+
+.shop-card.is-locked .motor-preview::after,
+.shop-card.is-locked .city-preview::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: 36px;
+  height: 28px;
+  border: 3px solid rgba(255, 235, 238, 0.94);
+  border-radius: 7px;
+  background:
+    linear-gradient(rgba(255, 235, 238, 0.94) 0 0) 50% 56% / 5px 9px no-repeat,
+    rgba(72, 10, 22, 0.78);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -34%);
+}
+
+.shop-card.is-locked .motor-preview {
+  overflow: hidden;
+}
+
+.shop-card.is-locked .motor-preview .placeholder-bike::before,
+.shop-card.is-locked .city-preview::before {
+  pointer-events: none;
+}
+
+.shop-card.is-locked .motor-preview::after {
+  pointer-events: none;
+}
+
+.shop-card.is-locked .motor-preview img,
+.shop-card.is-locked .city-preview img,
+.shop-card.is-locked .city-preview-art,
+.shop-card.is-locked .placeholder-bike {
+  filter: grayscale(0.45) brightness(0.72);
+}
+
+.shop-card.is-locked .motor-preview {
+  border-color: rgba(255, 91, 110, 0.38);
+}
+
+.shop-card.is-locked .city-preview {
+  border-color: rgba(255, 91, 110, 0.38);
+}
+
 .motor-preview {
   grid-area: preview;
   position: relative;
