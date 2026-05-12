@@ -1738,11 +1738,14 @@ function drawRoad() {
 
 function drawScreenHud() {
   if (state !== "playing") return;
+
   ctx.save();
+
   const screenW = viewportWidth();
   const screenH = viewportHeight();
   const mobileLandscape = isMobileLandscape();
   const compact = screenW < 560 || mobileLandscape;
+
   const pad = compact ? 10 : 18;
   const top = compact ? Math.max(8, Math.round(screenH * 0.025)) : 16;
   const pillH = compact ? 32 : 42;
@@ -1751,91 +1754,225 @@ function drawScreenHud() {
   if (compact) {
     drawMetricPill(pad, top, 134, pillH, "distance", `${Math.floor(game.distance)} m`);
     drawSpeedGauge(screenW - pad - 112, top, 112, pillH, currentSpeedKmh(), true);
-    drawMetricPill(pad, top + pillH + gap, 102, pillH, "package", game.deliveries, "#ffb238");
-    drawMetricPill(screenW - pad - 94, top + pillH + gap, 94, pillH, "coin", game.runCoins, "#ffd166");
+
+    drawMetricPill(
+      pad,
+      top + pillH + gap,
+      102,
+      pillH,
+      "package",
+      game.deliveries,
+      "#ffb238"
+    );
+
+    drawMetricPill(
+      screenW - pad - 94,
+      top + pillH + gap,
+      94,
+      pillH,
+      "coin",
+      game.runCoins,
+      "#ffd166"
+    );
+
     drawScreenPowerHud(pad, top + (pillH + gap) * 2);
   } else {
     drawMetricPill(18, 16, 178, 42, "distance", `${Math.floor(game.distance)} m`);
     drawSpeedGauge(screenW / 2 - 88, 12, 176, 52, currentSpeedKmh(), false);
-    drawMetricPill(screenW - 302, 16, 122, 42, "package", game.deliveries, "#ffb238");
-    drawMetricPill(screenW - 164, 16, 146, 42, "coin", game.runCoins, "#ffd166");
+
+    drawMetricPill(
+      screenW - 302,
+      16,
+      122,
+      42,
+      "package",
+      game.deliveries,
+      "#ffb238"
+    );
+
+    drawMetricPill(
+      screenW - 164,
+      16,
+      146,
+      42,
+      "coin",
+      game.runCoins,
+      "#ffd166"
+    );
+
     drawScreenPowerHud(18, 66);
   }
 
   if (game.messageTimer > 0) {
     const banner = messageBannerLayout(screenW, screenH, compact, mobileLandscape);
     const width = banner.width;
+    const height = banner.height;
+
     const x = screenW / 2 - width / 2;
     const y = banner.y;
-    const duration = game.messageDuration || 1.8;
+
+    const duration = game.messageDuration || 1.4;
     const life = clamp(game.messageTimer / duration, 0, 1);
-    const intro = clamp((duration - game.messageTimer) / 0.22, 0, 1);
-    const alpha = Math.min(intro, clamp(game.messageTimer / 0.28, 0, 1));
-    drawMessageToast(x, y + (1 - intro) * -6, width, banner.height, game.message, compact, mobileLandscape, alpha, life);
+
+    const intro = clamp((duration - game.messageTimer) / 0.18, 0, 1);
+    const outro = clamp(game.messageTimer / 0.22, 0, 1);
+    const alpha = Math.min(intro, outro);
+
+    const slideY = y + (1 - intro) * -8;
+
+    drawMessageToast(
+      x,
+      slideY,
+      width,
+      height,
+      game.message,
+      compact,
+      mobileLandscape,
+      alpha,
+      life
+    );
+
     ctx.globalAlpha = 1;
   }
+
   ctx.restore();
 }
 
 function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
   if (mobileLandscape) {
     return {
-      width: clamp(screenW * 0.28, 148, 204),
-      height: clamp(screenH * 0.09, 28, 32),
-      y: clamp(screenH * 0.075, 24, 34),
+      width: clamp(screenW * 0.25, 136, 188),
+      height: 30,
+      y: clamp(screenH * 0.055, 18, 30),
     };
   }
+
   if (compact) {
     return {
-      width: Math.min(screenW * 0.76, 286),
-      height: 38,
-      y: Math.max(88, Math.round(screenH * 0.15)),
+      width: Math.min(screenW * 0.68, 258),
+      height: 36,
+      y: Math.max(82, Math.round(screenH * 0.13)),
     };
   }
+
   return {
-    width: 320,
-    height: 40,
-    y: 74,
+    width: 292,
+    height: 38,
+    y: 72,
   };
 }
 
 function drawMessageToast(x, y, width, height, text, compact, mobileLandscape, alpha, life) {
   const type = messageType(text);
-  const palette = {
-    delivery: { accent: "#44d7b6", fill: "rgba(9, 36, 34, 0.72)", glow: "rgba(68, 215, 182, 0.28)", icon: "package" },
-    milestone: { accent: "#ffb238", fill: "rgba(42, 27, 7, 0.74)", glow: "rgba(255, 178, 56, 0.32)", icon: "star" },
-    danger: { accent: "#ff5b6e", fill: "rgba(41, 9, 16, 0.76)", glow: "rgba(255, 91, 110, 0.3)", icon: "crash" },
-    skill: { accent: "#65c7ff", fill: "rgba(8, 26, 45, 0.72)", glow: "rgba(101, 199, 255, 0.26)", icon: "spark" },
-  }[type];
+
+  const palettes = {
+    delivery: {
+      accent: "#44d7b6",
+      fill: "rgba(7, 33, 30, 0.78)",
+      stroke: "rgba(68, 215, 182, 0.32)",
+      glow: "rgba(68, 215, 182, 0.25)",
+      icon: "package",
+    },
+    milestone: {
+      accent: "#ffb238",
+      fill: "rgba(43, 28, 8, 0.82)",
+      stroke: "rgba(255, 178, 56, 0.35)",
+      glow: "rgba(255, 178, 56, 0.3)",
+      icon: "star",
+    },
+    danger: {
+      accent: "#ff5b6e",
+      fill: "rgba(43, 9, 17, 0.84)",
+      stroke: "rgba(255, 91, 110, 0.36)",
+      glow: "rgba(255, 91, 110, 0.32)",
+      icon: "crash",
+    },
+    skill: {
+      accent: "#65c7ff",
+      fill: "rgba(8, 25, 43, 0.8)",
+      stroke: "rgba(101, 199, 255, 0.34)",
+      glow: "rgba(101, 199, 255, 0.28)",
+      icon: "spark",
+    },
+  };
+
+  const palette = palettes[type] || palettes.delivery;
   const label = messageLabel(text, mobileLandscape);
-  const iconBox = height - 6;
-  const progressWidth = Math.max(0, (width - 16) * life);
+
+  const iconBox = height - 7;
+  const iconX = x + 4;
+  const iconY = y + 3.5;
 
   ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = compact ? 8 : 12;
-  ctx.shadowOffsetY = compact ? 2 : 4;
-  roundRect(x, y, width, height, height / 2, palette.fill, "rgba(255,255,255,0.12)");
-  ctx.shadowColor = "transparent";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-  roundRect(x + 3, y + 3, iconBox, iconBox, iconBox / 2, "rgba(255,255,255,0.08)", palette.accent);
-  drawToastIcon(palette.icon, x + 3 + iconBox / 2, y + height / 2, iconBox * 0.54, palette.accent);
 
-  ctx.fillStyle = palette.accent;
-  roundRect(x + 8, y + height - 3, progressWidth, 2, 999, palette.accent);
+  ctx.globalAlpha = alpha;
+
+  ctx.shadowColor = palette.glow;
+  ctx.shadowBlur = compact ? 8 : 13;
+  ctx.shadowOffsetY = 3;
+
+  roundRect(
+    x,
+    y,
+    width,
+    height,
+    height / 2,
+    palette.fill,
+    palette.stroke
+  );
+
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  roundRect(
+    iconX,
+    iconY,
+    iconBox,
+    iconBox,
+    iconBox / 2,
+    "rgba(255, 255, 255, 0.08)",
+    palette.accent
+  );
+
+  drawToastIcon(
+    palette.icon,
+    iconX + iconBox / 2,
+    y + height / 2,
+    iconBox * 0.52,
+    palette.accent
+  );
+
+  const progressW = Math.max(0, (width - 16) * life);
+  roundRect(
+    x + 8,
+    y + height - 4,
+    progressW,
+    2,
+    999,
+    palette.accent
+  );
 
   ctx.fillStyle = "#f9fbff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  const fontSize = clamp(height * 0.35, compact ? 10 : 12, compact ? 12 : 14);
-  ctx.font = `900 ${fontSize}px system-ui`;
+
+  const fontSize = mobileLandscape ? 11 : compact ? 12 : 13;
+  ctx.font = `900 ${fontSize}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+
   const maxTextWidth = width - iconBox - 28;
   let fittedLabel = label;
+
   while (ctx.measureText(fittedLabel).width > maxTextWidth && fittedLabel.length > 8) {
     fittedLabel = `${fittedLabel.slice(0, -2)}…`;
   }
-  ctx.fillText(fittedLabel, x + iconBox + 13, y + height / 2 + 1);
+
+  ctx.fillText(
+    fittedLabel,
+    x + iconBox + 15,
+    y + height / 2 + 1
+  );
+
   ctx.restore();
 }
 
@@ -1843,72 +1980,100 @@ function messageType(text) {
   if (text.includes("Kaza")) return "danger";
   if (text.includes("sıyrılma")) return "skill";
   if (text.includes("paket attın")) return "milestone";
+  if (text.includes("Teslimat")) return "delivery";
   return "delivery";
 }
 
 function messageLabel(text, mobileLandscape) {
-  if (!mobileLandscape) return text;
+  if (text.includes("Yakın sıyrılma")) {
+    return mobileLandscape ? "Sıyrılma +2" : "Yakın sıyrıldın! +2";
+  }
+
+  if (text.includes("Kaza")) {
+    return mobileLandscape ? "Kaza!" : "Kaza yaptasdın!";
+  }
+
   if (text.includes("Teslimat tamam")) {
     const coinMatch = text.match(/\+\d+\s*coin/);
-    return coinMatch ? `Teslimat ${coinMatch[0].replace(" coin", "")}` : "Teslimat";
+    if (mobileLandscape) {
+      return coinMatch ? `Teslimat ${coinMatch[0].replace(" coin", "")}` : "Teslimat!";
+    }
+    return coinMatch ? `Teslimat tamam! ${coinMatch[0]}` : "Teslimat tamam!";
   }
-  if (text.includes("Teslimat noktası")) return "Paket noktası";
-  if (text.includes("Yakın sıyrılma")) return "Sıyrılma +2";
-  if (text.includes("Kaza")) return "Kaza";
-  return text.replace(" attın", "");
+
+  if (text.includes("Teslimat noktası")) {
+    return mobileLandscape ? "Paket noktası" : "Paket noktası yaklaştı!";
+  }
+
+  if (text.includes("paket attın")) {
+    return text.replace(" attın", " paket!");
+  }
+
+  return text;
 }
 
 function drawToastIcon(type, cx, cy, size, accent) {
   ctx.save();
+
   ctx.strokeStyle = accent;
   ctx.fillStyle = accent;
   ctx.lineWidth = Math.max(2, size * 0.14);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  if (type === "package") {
-    ctx.strokeRect(cx - size * 0.36, cy - size * 0.28, size * 0.72, size * 0.56);
+
+  if (type === "crash") {
     ctx.beginPath();
-    ctx.moveTo(cx - size * 0.36, cy - size * 0.1);
-    ctx.lineTo(cx, cy + size * 0.08);
-    ctx.lineTo(cx + size * 0.36, cy - size * 0.1);
-    ctx.stroke();
+    ctx.moveTo(cx - size * 0.38, cy - size * 0.18);
+    ctx.lineTo(cx - size * 0.08, cy - size * 0.18);
+    ctx.lineTo(cx - size * 0.2, cy - size * 0.42);
+    ctx.lineTo(cx + size * 0.38, cy + size * 0.02);
+    ctx.lineTo(cx + size * 0.08, cy + size * 0.02);
+    ctx.lineTo(cx + size * 0.2, cy + size * 0.38);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === "spark") {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size * 0.48);
+    ctx.lineTo(cx + size * 0.12, cy - size * 0.1);
+    ctx.lineTo(cx + size * 0.46, cy);
+    ctx.lineTo(cx + size * 0.12, cy + size * 0.1);
+    ctx.lineTo(cx, cy + size * 0.48);
+    ctx.lineTo(cx - size * 0.12, cy + size * 0.1);
+    ctx.lineTo(cx - size * 0.46, cy);
+    ctx.lineTo(cx - size * 0.12, cy - size * 0.1);
+    ctx.closePath();
+    ctx.fill();
   } else if (type === "star") {
     ctx.beginPath();
+
     for (let i = 0; i < 10; i += 1) {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 10;
-      const radius = i % 2 === 0 ? size * 0.44 : size * 0.2;
+      const angle = -Math.PI / 2 + i * Math.PI / 5;
+      const radius = i % 2 === 0 ? size * 0.46 : size * 0.2;
       const px = cx + Math.cos(angle) * radius;
       const py = cy + Math.sin(angle) * radius;
+
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
+
     ctx.closePath();
-    ctx.fill();
-  } else if (type === "crash") {
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - size * 0.42);
-    ctx.lineTo(cx + size * 0.42, cy + size * 0.32);
-    ctx.lineTo(cx - size * 0.42, cy + size * 0.32);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - size * 0.16);
-    ctx.lineTo(cx, cy + size * 0.08);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy + size * 0.22, size * 0.03, 0, Math.PI * 2);
     ctx.fill();
   } else {
+    ctx.strokeRect(
+      cx - size * 0.34,
+      cy - size * 0.24,
+      size * 0.68,
+      size * 0.48
+    );
+
     ctx.beginPath();
-    ctx.moveTo(cx + size * 0.18, cy - size * 0.42);
-    ctx.lineTo(cx - size * 0.08, cy - size * 0.02);
-    ctx.lineTo(cx + size * 0.18, cy - size * 0.02);
-    ctx.lineTo(cx - size * 0.22, cy + size * 0.42);
-    ctx.lineTo(cx - size * 0.04, cy + size * 0.1);
-    ctx.lineTo(cx - size * 0.28, cy + size * 0.1);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(cx - size * 0.2, cy - size * 0.24);
+    ctx.lineTo(cx - size * 0.08, cy - size * 0.42);
+    ctx.lineTo(cx + size * 0.18, cy - size * 0.42);
+    ctx.lineTo(cx + size * 0.3, cy - size * 0.24);
+    ctx.stroke();
   }
+
   ctx.restore();
 }
 
