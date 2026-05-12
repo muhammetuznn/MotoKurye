@@ -1762,14 +1762,37 @@ function drawScreenHud() {
   }
 
   if (game.messageTimer > 0) {
-    const width = compact ? Math.min(screenW * 0.58, 270) : 340;
+    const banner = messageBannerLayout(screenW, screenH, compact, mobileLandscape);
+    const width = banner.width;
     const x = screenW / 2 - width / 2;
-    const y = compact ? Math.max(top + pillH + 8, Math.round(screenH * 0.11)) : Math.round(screenH * 0.14);
+    const y = banner.y;
     ctx.globalAlpha = clamp(game.messageTimer, 0, 1);
-    drawMessageSign(x, y, width, compact ? 34 : 42, game.message, compact);
+    drawMessageSign(x, y, width, banner.height, game.message, compact);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
+}
+
+function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
+  if (mobileLandscape) {
+    return {
+      width: clamp(screenW * 0.34, 178, 230),
+      height: clamp(screenH * 0.11, 28, 34),
+      y: clamp(screenH * 0.15, 34, 58),
+    };
+  }
+  if (compact) {
+    return {
+      width: Math.min(screenW * 0.72, 280),
+      height: 36,
+      y: Math.max(84, Math.round(screenH * 0.16)),
+    };
+  }
+  return {
+    width: 340,
+    height: 42,
+    y: Math.round(screenH * 0.14),
+  };
 }
 
 function drawMessageSign(x, y, width, height, text, compact) {
@@ -1794,8 +1817,9 @@ function drawMessageSign(x, y, width, height, text, compact) {
   ctx.fillStyle = "#f9fbff";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.font = `900 ${compact ? 12 : 15}px system-ui`;
-  const maxTextWidth = width - (compact ? 42 : 50);
+  const fontSize = clamp(height * 0.36, compact ? 10 : 13, compact ? 12 : 15);
+  ctx.font = `900 ${fontSize}px system-ui`;
+  const maxTextWidth = width - (compact ? 38 : 50);
   let label = text;
   while (ctx.measureText(label).width > maxTextWidth && label.length > 8) {
     label = `${label.slice(0, -2)}…`;
