@@ -50,6 +50,7 @@ const WORLD = {
   startSpeed: 205,
 };
 const MAX_PARTICLES = 130;
+const DELIVERY_MILESTONES = [5, 10, 20, 30, 50, 75, 100];
 
 const assets = loadAssets({
   courier: "Asssets/kurye.png",
@@ -181,6 +182,7 @@ const motors = [
     asset: "motor1",
     name: "Başlangıç Scooter",
     unlockPackages: 0,
+    price: 0,
     desc: "Dengeli ve güvenilir başlangıç motoru.",
     color: "#ef4e45",
     accent: "#ffd06a",
@@ -192,6 +194,7 @@ const motors = [
     asset: "motor2",
     name: "Eski Kurye Motoru",
     unlockPackages: 5,
+    price: 500,
     desc: "İlk ciddi teslimat hedefinden sonra açılır.",
     color: "#78a083",
     accent: "#e5b45c",
@@ -203,6 +206,7 @@ const motors = [
     asset: "motor3",
     name: "Neon Gece Motoru",
     unlockPackages: 12,
+    price: 1250,
     desc: "Gece temposu için hızlı ama hassas.",
     color: "#2de2e6",
     accent: "#f6019d",
@@ -214,6 +218,7 @@ const motors = [
     asset: "motor4",
     name: "Altın Paket Motoru",
     unlockPackages: 20,
+    price: 2500,
     desc: "Daha yüksek hız, daha iyi ivme.",
     color: "#f6c84c",
     accent: "#fff0a6",
@@ -225,6 +230,7 @@ const motors = [
     asset: "motor5",
     name: "Sahil Motoru",
     unlockPackages: 32,
+    price: 4500,
     desc: "Yumuşak kontrol, orta hız.",
     color: "#44d7b6",
     accent: "#65c7ff",
@@ -236,6 +242,7 @@ const motors = [
     asset: "motor6",
     name: "Sanayi Canavarı",
     unlockPackages: 48,
+    price: 7500,
     desc: "Ağır ama güçlü çıkış verir.",
     color: "#9ca3af",
     accent: "#ffb238",
@@ -247,6 +254,7 @@ const motors = [
     asset: "motor7",
     name: "Gece Roketi",
     unlockPackages: 70,
+    price: 12000,
     desc: "Hızlı koşular için agresif seçim.",
     color: "#8b5cf6",
     accent: "#f6019d",
@@ -258,6 +266,7 @@ const motors = [
     asset: "motor8",
     name: "Yağmur Kaçkını",
     unlockPackages: 95,
+    price: 18000,
     desc: "Yağmurda daha az hız kaybeder.",
     color: "#2563eb",
     accent: "#93c5fd",
@@ -270,6 +279,7 @@ const motors = [
     asset: "motor9",
     name: "Turbo Paket",
     unlockPackages: 125,
+    price: 28000,
     desc: "Turbo etkisini daha iyi taşır.",
     color: "#f97316",
     accent: "#fde047",
@@ -282,6 +292,7 @@ const motors = [
     asset: "motor10",
     name: "Efsane Kurye",
     unlockPackages: 160,
+    price: 50000,
     desc: "En üst seviye hız ve güç.",
     color: "#f6c84c",
     accent: "#ffffff",
@@ -328,11 +339,13 @@ function loadSave() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (parsed && typeof parsed === "object") {
+      const equippedMotor = parsed.equippedMotor || migrateMotorId(parsed.equippedSkin) || "motor1";
       return {
         coins: Number(parsed.coins) || 0,
         bestScore: Number(parsed.bestScore) || 0,
         bestPackages: Number(parsed.bestPackages) || 0,
-        equippedMotor: parsed.equippedMotor || migrateMotorId(parsed.equippedSkin) || "motor1",
+        equippedMotor,
+        ownedMotors: normalizeOwnedMotors(parsed.ownedMotors, equippedMotor),
         ownedCities: normalizeOwnedCities(parsed.ownedCities),
         equippedCity: parsed.equippedCity || "istanbul",
         records: normalizeRecords(parsed.records),
@@ -346,6 +359,7 @@ function loadSave() {
     bestScore: 0,
     bestPackages: 0,
     equippedMotor: "motor1",
+    ownedMotors: ["motor1"],
     ownedCities: ["istanbul"],
     equippedCity: "istanbul",
     records: [],
@@ -374,6 +388,15 @@ function normalizeRecords(records) {
 function normalizeOwnedCities(ownedCities) {
   const owned = Array.isArray(ownedCities) ? ownedCities : ["istanbul"];
   return Array.from(new Set(["istanbul", ...owned.filter((id) => cities.some((city) => city.id === id))]));
+}
+
+function normalizeOwnedMotors(ownedMotors, equippedMotor) {
+  const owned = Array.isArray(ownedMotors) ? ownedMotors : [];
+  const valid = owned.filter((id) => motors.some((motor) => motor.id === id));
+  if (equippedMotor && motors.some((motor) => motor.id === equippedMotor)) {
+    valid.push(equippedMotor);
+  }
+  return Array.from(new Set(["motor1", ...valid]));
 }
 
 function persist() {
@@ -455,6 +478,7 @@ function createGame() {
     screenShake: 0,
     message: "",
     messageTimer: 0,
+    celebratedMilestones: [],
     lastObstacleId: "",
     lastAirThreatDistance: 0,
     nearMisses: 0,
@@ -529,10 +553,27 @@ function prepareTransparentAsset(image, tolerance) {
     pushIfBackground(x, y + 1);
     pushIfBackground(x, y - 1);
   }
+  removeInteriorBackgroundPixels(data, width, height, edgeColor, tolerance);
   softenTransparentEdges(data, width, height);
   workCtx.putImageData(pixels, 0, 0);
   image.processedCanvas = work;
   image.processedSrc = work.toDataURL("image/png");
+}
+
+function removeInteriorBackgroundPixels(data, width, height, edgeColor, tolerance) {
+  const strictTolerance = tolerance * 0.72;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const index = (y * width + x) * 4;
+      if (data[index + 3] < 8) continue;
+      if (colorDistance(data, index, edgeColor) > strictTolerance) continue;
+      const whiteness = (data[index] + data[index + 1] + data[index + 2]) / 3;
+      const colorSpread = Math.max(data[index], data[index + 1], data[index + 2]) - Math.min(data[index], data[index + 1], data[index + 2]);
+      const looksLikePlainBackground = whiteness > 210 && colorSpread < 34;
+      if (!looksLikePlainBackground) continue;
+      data[index + 3] = 0;
+    }
+  }
 }
 
 function averageEdgeColor(data, width, height) {
@@ -748,30 +789,39 @@ function renderShop() {
   const motorGrid = document.createElement("div");
   motorGrid.className = "shop-grid";
   for (const motor of motors) {
-    const unlocked = isMotorUnlocked(motor);
+    const packageReady = isMotorUnlocked(motor);
+    const owned = save.ownedMotors.includes(motor.id);
     const equipped = save.equippedMotor === motor.id;
+    const canBuy = packageReady && save.coins >= motor.price;
     const card = document.createElement("article");
-    card.className = `shop-card${unlocked ? "" : " is-locked"}`;
+    card.className = `shop-card${owned || canBuy ? "" : " is-locked"}`;
     const asset = motorAssets[motor.asset];
     const preview = asset && asset.complete && asset.naturalWidth > 0
       ? `<img src="${asset.processedSrc || asset.src}" alt="">`
       : `<div class="placeholder-bike" style="background: linear-gradient(135deg, ${motor.color}, ${motor.accent});"></div>`;
-    const progress = motor.unlockPackages === 0 ? 100 : clamp((save.bestPackages / motor.unlockPackages) * 100, 0, 100);
+    const packageProgress = motor.unlockPackages === 0 ? 100 : clamp((save.bestPackages / motor.unlockPackages) * 100, 0, 100);
+    const coinProgress = motor.price === 0 ? 100 : clamp((save.coins / motor.price) * 100, 0, 100);
     const remaining = Math.max(0, motor.unlockPackages - save.bestPackages);
     card.innerHTML = `
       <div class="motor-preview" style="background: linear-gradient(135deg, ${motor.color}22, ${motor.accent}33);">${preview}</div>
       <div class="motor-title-row">
         <h3>${motor.name}</h3>
-        <span class="lock-badge ${unlocked ? "is-open" : ""}">${unlocked ? "AÇIK" : "KİLİTLİ"}</span>
+        <span class="lock-badge ${owned ? "is-open" : ""}">${owned ? "GARAJDA" : packageReady ? "ALINABİLİR" : "KİLİTLİ"}</span>
       </div>
       <p>${motor.desc}</p>
       <div class="unlock-box">
         <div class="unlock-copy">
-          <span>${unlocked ? "Paket rekoru yeterli" : "Açmak için paket rekoru"}</span>
-          <strong>${unlocked ? `${save.bestPackages} paket` : `${remaining} paket kaldı`}</strong>
+          <span>${packageReady ? "Paket şartı tamam" : "Paket rekoru şartı"}</span>
+          <strong>${packageReady ? `${formatNumber(save.bestPackages)} paket` : `${formatNumber(remaining)} paket kaldı`}</strong>
         </div>
-        <div class="unlock-progress"><span style="width:${progress}%"></span></div>
-        <small>${Math.min(save.bestPackages, motor.unlockPackages)} / ${motor.unlockPackages} paket</small>
+        <div class="unlock-progress"><span style="width:${packageProgress}%"></span></div>
+        <small>${formatNumber(Math.min(save.bestPackages, motor.unlockPackages))} / ${formatNumber(motor.unlockPackages)} paket</small>
+        <div class="unlock-copy">
+          <span>${owned ? "Garajda" : "Satın alma bedeli"}</span>
+          <strong>${owned ? "Kalıcı" : `${formatNumber(motor.price)} coin`}</strong>
+        </div>
+        <div class="unlock-progress"><span style="width:${coinProgress}%"></span></div>
+        <small>${owned ? "Satın alındı" : `${formatNumber(save.coins)} / ${formatNumber(motor.price)} coin`}</small>
       </div>
       <div class="stat-bars">
         <div class="stat-line"><span>Hız</span><div class="bar"><span style="width:${motor.speed * 10}%"></span></div><strong>${motor.speed}</strong></div>
@@ -779,12 +829,27 @@ function renderShop() {
       </div>
     `;
     const button = document.createElement("button");
-    button.textContent = equipped ? "Seçili" : unlocked ? "Seç" : "Kilitli";
+    button.textContent = motorButtonLabel(owned, equipped, packageReady, canBuy);
     button.classList.toggle("is-equipped", equipped);
-    button.disabled = equipped || !unlocked;
+    button.disabled = equipped || (!owned && (!packageReady || !canBuy));
     button.addEventListener("click", () => {
       unlockAudio();
       playSound("ui");
+      const alreadyOwned = save.ownedMotors.includes(motor.id);
+      if (!alreadyOwned) {
+        if (!isMotorUnlocked(motor)) {
+          showShopNotice("Paket rekoru yetmiyor", "warning");
+          return;
+        }
+        if (save.coins < motor.price) {
+          showShopNotice("Coin yetersiz", "warning");
+          return;
+        }
+        save.coins = Math.max(0, save.coins - motor.price);
+        save.ownedMotors.push(motor.id);
+        showShopNotice(`${motor.name} garaja eklendi: -${formatNumber(motor.price)} coin`);
+        playSound("delivery");
+      }
       save.equippedMotor = motor.id;
       playSound("powerup");
       persist();
@@ -795,6 +860,13 @@ function renderShop() {
   }
   motorSection.appendChild(motorGrid);
   ui.shopItems.appendChild(motorSection);
+}
+
+function motorButtonLabel(owned, equipped, packageReady, canBuy) {
+  if (equipped) return "Seçili";
+  if (owned) return "Seç";
+  if (!packageReady) return "Kilitli";
+  return canBuy ? "Satın al" : "Coin yetersiz";
 }
 
 function renderCityShop() {
@@ -890,7 +962,7 @@ function isMotorUnlocked(motor) {
 }
 
 function currentMotor() {
-  const selected = motors.find((motor) => motor.id === save.equippedMotor && isMotorUnlocked(motor));
+  const selected = motors.find((motor) => motor.id === save.equippedMotor && save.ownedMotors.includes(motor.id));
   return selected || motors[0];
 }
 
@@ -1191,9 +1263,25 @@ function resolveCollections() {
       game.score += Math.round(100 * multiplier);
       playSound("delivery");
       spawnSpark(checkpoint.x + 40, checkpoint.y + 130, "#44d7b6", 20);
-      flashMessage(`Teslimat tamam! +${bonus} coin`);
+      if (!maybeCelebrateDeliveryMilestone()) {
+        flashMessage(`Teslimat tamam! +${bonus} coin`);
+      }
     }
   }
+}
+
+function maybeCelebrateDeliveryMilestone() {
+  const milestone = DELIVERY_MILESTONES.find((item) => item === game.deliveries);
+  if (!milestone || game.celebratedMilestones.includes(milestone)) {
+    return false;
+  }
+  game.celebratedMilestones.push(milestone);
+  flashMessage(`${milestone} paket attın!`);
+  game.messageTimer = 2.45;
+  playSound("milestone");
+  spawnConfetti(viewportWidth() / 2, viewportHeight() * 0.2, milestone >= 20 ? 42 : 28);
+  game.screenShake = Math.max(game.screenShake, milestone >= 20 ? 0.14 : 0.08);
+  return true;
 }
 
 function applyPowerup(powerup) {
@@ -1388,6 +1476,24 @@ function spawnCrashDust(x, y, count) {
       maxLife: 0.62,
       color: "rgba(214, 198, 172, 0.82)",
       size: random(5, 11),
+    });
+  }
+}
+
+function spawnConfetti(screenX, screenY, count) {
+  const worldX = (screenX - camera.offsetX) / Math.max(camera.scale, 0.001);
+  const worldY = (screenY - camera.offsetY) / Math.max(camera.scale, 0.001);
+  const colors = ["#ffb238", "#44d7b6", "#ff5b6e", "#65c7ff", "#f9fbff"];
+  for (let i = 0; i < count; i += 1) {
+    game.particles.push({
+      x: worldX + random(-110, 110),
+      y: worldY + random(-24, 18),
+      vx: random(-120, 120),
+      vy: random(-210, -40),
+      life: random(0.7, 1.25),
+      maxLife: 1.25,
+      color: colors[i % colors.length],
+      size: random(3, 7),
     });
   }
 }
@@ -1656,59 +1762,45 @@ function drawScreenHud() {
   }
 
   if (game.messageTimer > 0) {
-    const width = compact ? Math.min(screenW - 24, 290) : 300;
+    const width = compact ? Math.min(screenW - 28, 330) : 340;
     const x = screenW / 2 - width / 2;
-    const hudBottom = compact ? top + (pillH + gap) * 3 : 66;
-    const y = Math.min(screenH * 0.3, hudBottom + (compact ? 8 : 10));
+    const y = Math.max(top + pillH + 12, Math.round(screenH * 0.16));
     ctx.globalAlpha = clamp(game.messageTimer, 0, 1);
-    drawMessageSign(x, y, width, compact ? 40 : 44, game.message, compact);
+    drawMessageSign(x, y, width, compact ? 38 : 42, game.message, compact);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
 }
 
 function drawMessageSign(x, y, width, height, text, compact) {
-  const postW = 8;
   ctx.save();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+  ctx.shadowColor = "rgba(0,0,0,0.34)";
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 8;
+  roundRect(x, y, width, height, 8, "rgba(7, 13, 24, 0.84)", "rgba(255, 178, 56, 0.62)");
+  ctx.shadowColor = "transparent";
+  const accent = ctx.createLinearGradient(x, y, x + width, y);
+  accent.addColorStop(0, "#44d7b6");
+  accent.addColorStop(0.48, "#ffb238");
+  accent.addColorStop(1, "#ff7a2f");
+  ctx.fillStyle = accent;
+  roundRect(x + 8, y + 7, 5, height - 14, 999, accent);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  roundRect(x + 18, y + 7, width - 26, height - 14, 6, "rgba(255, 255, 255, 0.08)");
+  ctx.fillStyle = "rgba(255, 178, 56, 0.22)";
   ctx.beginPath();
-  ctx.ellipse(x + width / 2, y + height + 8, width * 0.38, 7, 0, 0, Math.PI * 2);
+  ctx.arc(x + width - 20, y + height / 2, 7, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#6b4a21";
-  roundRect(x + 24, y + height - 2, postW, 18, 3, "#6b4a21", "#2a1706");
-  roundRect(x + width - 32, y + height - 2, postW, 18, 3, "#6b4a21", "#2a1706");
-  roundRect(x, y, width, height, 8, "#241608", "#ffb238");
-  roundRect(x + 5, y + 5, width - 10, height - 10, 6, "rgba(255, 178, 56, 0.14)", "rgba(255, 178, 56, 0.5)");
-  ctx.fillStyle = "#ffb238";
-  ctx.beginPath();
-  ctx.moveTo(x + 12, y + height / 2);
-  ctx.lineTo(x + 24, y + 10);
-  ctx.lineTo(x + 24, y + height - 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x + width - 12, y + height / 2);
-  ctx.lineTo(x + width - 24, y + 10);
-  ctx.lineTo(x + width - 24, y + height - 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.48)";
-  for (const sx of [x + 34, x + width - 34]) {
-    ctx.beginPath();
-    ctx.arc(sx, y + 12, 2.4, 0, Math.PI * 2);
-    ctx.arc(sx, y + height - 12, 2.4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = "#ffe7a3";
-  ctx.textAlign = "center";
+  ctx.fillStyle = "#f9fbff";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.font = `900 ${compact ? 13 : 16}px system-ui`;
-  const maxTextWidth = width - 58;
+  ctx.font = `900 ${compact ? 13 : 15}px system-ui`;
+  const maxTextWidth = width - 50;
   let label = text;
   while (ctx.measureText(label).width > maxTextWidth && label.length > 8) {
     label = `${label.slice(0, -2)}…`;
   }
-  ctx.fillText(label, x + width / 2, y + height / 2 + 1);
+  ctx.fillText(label, x + 24, y + height / 2 + 1);
   ctx.restore();
 }
 
@@ -2387,22 +2479,22 @@ function startEngineSound() {
   const wobbleGain = audioCtx.createGain();
 
   master.gain.setValueAtTime(0.0001, now);
-  master.gain.linearRampToValueAtTime(0.034, now + 0.28);
-  piston.type = "sawtooth";
-  body.type = "triangle";
-  piston.frequency.setValueAtTime(52, now);
-  body.frequency.setValueAtTime(104, now);
+  master.gain.linearRampToValueAtTime(0.018, now + 0.28);
+  piston.type = "triangle";
+  body.type = "sine";
+  piston.frequency.setValueAtTime(44, now);
+  body.frequency.setValueAtTime(88, now);
   rumble.buffer = makeNoiseBuffer(0.7);
   rumble.loop = true;
   rumbleFilter.type = "bandpass";
-  rumbleFilter.frequency.setValueAtTime(92, now);
-  rumbleFilter.Q.setValueAtTime(1.1, now);
-  rumbleGain.gain.setValueAtTime(0.018, now);
+  rumbleFilter.frequency.setValueAtTime(74, now);
+  rumbleFilter.Q.setValueAtTime(0.85, now);
+  rumbleGain.gain.setValueAtTime(0.009, now);
   bodyFilter.type = "lowpass";
-  bodyFilter.frequency.setValueAtTime(410, now);
+  bodyFilter.frequency.setValueAtTime(280, now);
   wobble.type = "sine";
-  wobble.frequency.setValueAtTime(11, now);
-  wobbleGain.gain.setValueAtTime(5.2, now);
+  wobble.frequency.setValueAtTime(7, now);
+  wobbleGain.gain.setValueAtTime(3.6, now);
   wobble.connect(wobbleGain);
   wobbleGain.connect(piston.frequency);
   wobbleGain.connect(body.frequency);
@@ -2417,7 +2509,7 @@ function startEngineSound() {
   body.start(now);
   rumble.start(now);
   wobble.start(now);
-  engineAudio = { master, piston, body, rumble, rumbleFilter, rumbleGain, bodyFilter, wobble, wobbleGain };
+  engineAudio = { master, piston, body, rumble, rumbleFilter, rumbleGain, bodyFilter, wobble, wobbleGain, nextPulseTime: now };
 }
 
 function stopEngineSound() {
@@ -2441,16 +2533,35 @@ function updateEngineSound(dt) {
   const turbo = game.player.turboTimer > 0 ? 1 : 0;
   const rain = game.player.rainTimer > 0 ? 1 : 0;
   const crash = game.crashing ? 1 : 0;
-  const base = 46 + speedRatio * 52 + (motor.speed - 1) * 1.5 + turbo * 12 - rain * 6;
-  const volume = crash ? 0.018 : 0.026 + speedRatio * 0.018 + turbo * 0.01 - rain * 0.008;
-  engineAudio.master.gain.setTargetAtTime(Math.max(0.01, volume), now, 0.11);
+  const base = 38 + speedRatio * 36 + (motor.speed - 1) * 1.1 + turbo * 8 - rain * 5;
+  const volume = crash ? 0.01 : 0.014 + speedRatio * 0.012 + turbo * 0.006 - rain * 0.005;
+  engineAudio.master.gain.setTargetAtTime(Math.max(0.006, volume), now, 0.13);
   engineAudio.piston.frequency.setTargetAtTime(Math.max(34, base), now, 0.08);
-  engineAudio.body.frequency.setTargetAtTime(Math.max(68, base * 2.02), now, 0.08);
-  engineAudio.bodyFilter.frequency.setTargetAtTime(320 + speedRatio * 520 + turbo * 180 - rain * 80, now, 0.12);
-  engineAudio.rumbleFilter.frequency.setTargetAtTime(76 + speedRatio * 74 + turbo * 24, now, 0.14);
-  engineAudio.rumbleGain.gain.setTargetAtTime(crash ? 0.012 : 0.014 + speedRatio * 0.018, now, 0.1);
-  engineAudio.wobble.frequency.setTargetAtTime(9 + speedRatio * 10 + turbo * 4, now, 0.14);
-  engineAudio.wobbleGain.gain.setTargetAtTime(crash ? 8 : 4.8 + speedRatio * 3.2, now, 0.14);
+  engineAudio.body.frequency.setTargetAtTime(Math.max(66, base * 1.85), now, 0.08);
+  engineAudio.bodyFilter.frequency.setTargetAtTime(240 + speedRatio * 360 + turbo * 120 - rain * 70, now, 0.14);
+  engineAudio.rumbleFilter.frequency.setTargetAtTime(64 + speedRatio * 58 + turbo * 18, now, 0.16);
+  engineAudio.rumbleGain.gain.setTargetAtTime(crash ? 0.006 : 0.008 + speedRatio * 0.012, now, 0.12);
+  engineAudio.wobble.frequency.setTargetAtTime(6 + speedRatio * 7 + turbo * 3, now, 0.16);
+  engineAudio.wobbleGain.gain.setTargetAtTime(crash ? 5 : 3.2 + speedRatio * 2.2, now, 0.16);
+  scheduleEnginePulses(now, speedRatio, turbo, rain, crash);
+}
+
+function scheduleEnginePulses(now, speedRatio, turbo, rain, crash) {
+  if (!engineAudio || crash) return;
+  const interval = clamp(0.17 - speedRatio * 0.065 - turbo * 0.025 + rain * 0.025, 0.075, 0.18);
+  const intensity = clamp(0.028 + speedRatio * 0.028 + turbo * 0.018 - rain * 0.012, 0.018, 0.07);
+  if (engineAudio.nextPulseTime < now) {
+    engineAudio.nextPulseTime = now + interval * 0.3;
+  }
+  while (engineAudio.nextPulseTime < now + 0.08) {
+    enginePulse(engineAudio.master, engineAudio.nextPulseTime, intensity);
+    engineAudio.nextPulseTime += interval;
+  }
+}
+
+function enginePulse(output, time, volume) {
+  tone(output, time, 82, 48, 0.055, "sine", volume);
+  noise(output, time, 0.045, volume * 0.32, 420);
 }
 
 function startMusicSound() {
@@ -2609,6 +2720,11 @@ function playSound(type) {
   } else if (type === "musicTest") {
     tone(master, now, 392, 784, 0.22, "triangle", 0.18);
     tone(master, now + 0.12, 523, 1046, 0.2, "sine", 0.12);
+  } else if (type === "milestone") {
+    tone(master, now, 523, 784, 0.12, "triangle", 0.14);
+    tone(master, now + 0.1, 659, 988, 0.14, "triangle", 0.15);
+    tone(master, now + 0.22, 784, 1175, 0.22, "triangle", 0.16);
+    noise(master, now + 0.04, 0.16, 0.032, 3200);
   }
 }
 
