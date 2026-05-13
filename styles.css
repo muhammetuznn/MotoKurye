@@ -269,8 +269,8 @@ h2 {
 
 .settings-button {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
   z-index: 30;
   display: grid;
   place-items: center;
@@ -284,30 +284,52 @@ h2 {
 
 .settings-button span {
   position: relative;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 0;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
   background:
-    linear-gradient(currentColor 0 0) 0 38% / 34% 28% no-repeat,
-    linear-gradient(135deg, transparent 0 38%, currentColor 39% 63%, transparent 64%) 28% 18% / 42% 64% no-repeat,
-    radial-gradient(circle at 76% 50%, transparent 0 42%, currentColor 43% 50%, transparent 51%);
+    radial-gradient(circle, transparent 0 25%, currentColor 26% 43%, transparent 44%),
+    conic-gradient(
+      from 8deg,
+      currentColor 0 9deg,
+      transparent 9deg 36deg,
+      currentColor 36deg 54deg,
+      transparent 54deg 81deg,
+      currentColor 81deg 99deg,
+      transparent 99deg 126deg,
+      currentColor 126deg 144deg,
+      transparent 144deg 171deg,
+      currentColor 171deg 189deg,
+      transparent 189deg 216deg,
+      currentColor 216deg 234deg,
+      transparent 234deg 261deg,
+      currentColor 261deg 279deg,
+      transparent 279deg 306deg,
+      currentColor 306deg 324deg,
+      transparent 324deg 360deg
+    );
 }
 
 .settings-button span::after {
   content: "";
   position: absolute;
-  inset: auto -3px 10px 2px;
-  width: 29px;
-  height: 3px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  transform: rotate(-42deg);
+  inset: 8px;
+  border-radius: 50%;
+  background: rgba(4, 9, 18, 0.92);
+  box-shadow: inset 0 0 0 2px currentColor;
 }
 
-.settings-button.is-muted span::after {
+.settings-button.is-muted span::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 11px;
+  height: 3px;
+  border-radius: 999px;
   background: var(--danger);
+  transform: rotate(-42deg);
+  z-index: 2;
 }
 
 .orientation-panel {
@@ -348,9 +370,21 @@ h2 {
   line-height: 1.4;
 }
 
-.orientation-card .ghost {
+.orientation-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
   margin: 18px auto 0;
-  max-width: 220px;
+  max-width: 320px;
+}
+
+.orientation-actions .primary,
+.orientation-actions .ghost {
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 12px;
+  font-size: 0.86rem;
 }
 
 .phone-turn {
@@ -445,6 +479,41 @@ h2 {
   filter: none;
 }
 
+.setting-range {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 800;
+}
+
+.setting-range strong {
+  min-width: 58px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(68, 215, 182, 0.18);
+  color: var(--mint);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.setting-range strong.is-off {
+  background: rgba(255, 91, 110, 0.15);
+  color: #ff9aa7;
+}
+
+.setting-range input {
+  grid-column: 2 / 4;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .toggle-icon {
   width: 28px;
   height: 28px;
@@ -465,6 +534,13 @@ h2 {
     linear-gradient(currentColor 0 0) 36% 13% / 9% 68% no-repeat,
     linear-gradient(currentColor 0 0) 72% 6% / 9% 58% no-repeat,
     linear-gradient(currentColor 0 0) 36% 8% / 45% 10% no-repeat;
+}
+
+.engine-icon {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 26%, currentColor 27% 38%, transparent 39%),
+    conic-gradient(from 225deg, currentColor 0 88deg, transparent 89deg 360deg);
 }
 
 .primary {
@@ -859,10 +935,8 @@ h2 {
   }
 
   .settings-button {
-    top: auto;
-    right: auto;
     bottom: max(14px, env(safe-area-inset-bottom));
-    left: 14px;
+    left: max(14px, env(safe-area-inset-left));
     width: 46px;
     min-height: 46px;
   }
@@ -905,14 +979,12 @@ h2 {
   }
 }
 
-@media (pointer: coarse) and (orientation: landscape) {
+@media (pointer: coarse) and (orientation: landscape), (max-height: 520px) and (orientation: landscape) {
   .app-shell {
     min-height: 0;
   }
 
   .settings-button {
-    top: auto;
-    right: auto;
     bottom: max(12px, env(safe-area-inset-bottom));
     left: max(12px, env(safe-area-inset-left));
     width: 44px;
@@ -961,11 +1033,11 @@ h2 {
 
   .panel.compact.game-over-panel {
     display: block;
-    width: min(360px, calc(100vw - 28px));
-    max-height: calc(var(--app-height, 100dvh) - 24px);
+    width: min(310px, calc(100vw - 28px));
+    max-height: calc(var(--app-height, 100dvh) - 18px);
     overflow: auto;
     margin-top: 0;
-    padding: 12px;
+    padding: 10px;
     justify-self: center;
     align-self: center;
   }
@@ -977,14 +1049,15 @@ h2 {
   }
 
   .game-over-panel h2 {
-    font-size: clamp(1.35rem, 4.5vw, 2.1rem);
+    font-size: clamp(1.25rem, 6vh, 1.75rem);
     text-align: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
 
   .game-over-panel .stat-row {
-    min-height: 28px;
-    font-size: 0.82rem;
+    min-height: 24px;
+    font-size: 0.78rem;
+    padding: 4px 0;
   }
 
   .game-over-panel .stat-row strong {
@@ -995,10 +1068,10 @@ h2 {
   .game-over-panel .secondary,
   .game-over-panel .ghost {
     width: 100%;
-    min-height: 34px;
-    margin-top: 8px;
+    min-height: 30px;
+    margin-top: 6px;
     padding: 0 10px;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
 
   .game-over-panel .icon-label::before {

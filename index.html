@@ -2,7 +2,7 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Kaçak Kurye: Son Paket</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -19,7 +19,10 @@
           <p class="kicker">Mobil oyun modu</p>
           <h2>Telefonu yan çevir</h2>
           <p>Yol daha geniş görünür, engelleri daha rahat yakalarsın.</p>
-          <button id="portraitStartBtn" class="ghost icon-label icon-play" type="button">Başla</button>
+          <div class="orientation-actions">
+            <button id="landscapeStartBtn" class="primary icon-label icon-play" type="button">Yatay aç</button>
+            <button id="portraitStartBtn" class="ghost icon-label icon-play" type="button">Dikey aç</button>
+          </div>
         </div>
       </section>
 
@@ -42,6 +45,12 @@
             <span>Müzik</span>
             <strong>Açık</strong>
           </button>
+          <label class="setting-range" for="engineVolume">
+            <span class="toggle-icon engine-icon" aria-hidden="true"></span>
+            <span>Motor sesi</span>
+            <strong id="engineVolumeLabel">65%</strong>
+            <input id="engineVolume" type="range" min="0" max="100" step="5" value="65" />
+          </label>
         </div>
       </section>
 

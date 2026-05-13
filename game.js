@@ -30,10 +30,13 @@ const ui = {
   closeSettingsBtn: document.getElementById("closeSettingsBtn"),
   soundToggle: document.getElementById("soundToggle"),
   musicToggle: document.getElementById("musicToggle"),
+  engineVolume: document.getElementById("engineVolume"),
+  engineVolumeLabel: document.getElementById("engineVolumeLabel"),
   restartBtn: document.getElementById("restartBtn"),
   goShopBtn: document.getElementById("goShopBtn"),
   backMenuBtn: document.getElementById("backMenuBtn"),
   orientationPanel: document.getElementById("orientationPanel"),
+  landscapeStartBtn: document.getElementById("landscapeStartBtn"),
   portraitStartBtn: document.getElementById("portraitStartBtn"),
 };
 
@@ -410,12 +413,13 @@ function loadSettings() {
       return {
         sound: parsed.sound !== false,
         music: parsed.music !== false,
+        engineVolume: clamp(Number(parsed.engineVolume ?? 0.65), 0, 1),
       };
     }
   } catch {
     // Ignore corrupt settings and use defaults.
   }
-  return { sound: true, music: true };
+  return { sound: true, music: true, engineVolume: 0.65 };
 }
 
 function persistSettings() {
@@ -693,7 +697,20 @@ function beginGame() {
 function beginPortraitGame() {
   pendingLandscapeStart = false;
   ui.orientationPanel.classList.remove("is-visible");
+  requestMobileFullscreen({ lockLandscape: false });
   beginGame();
+}
+
+function beginLandscapeGame() {
+  unlockAudio();
+  requestMobileFullscreen({ lockLandscape: true });
+  if (viewportWidth() > viewportHeight()) {
+    beginGame();
+    return;
+  }
+  pendingLandscapeStart = true;
+  closeSettings();
+  ui.orientationPanel.classList.add("is-visible");
 }
 
 function shouldPromptLandscape() {
@@ -702,6 +719,9 @@ function shouldPromptLandscape() {
 
 function handleViewportChange() {
   resizeCanvas();
+  if (state === "playing") {
+    requestMobileFullscreen({ lockLandscape: viewportWidth() > viewportHeight() });
+  }
   if (pendingLandscapeStart && !shouldPromptLandscape()) {
     beginGame();
   }
@@ -720,18 +740,26 @@ function isMobileLike() {
 }
 
 function isMobileLandscape() {
-  return isMobileLike() && viewportWidth() > viewportHeight();
+  return viewportWidth() > viewportHeight() && (isMobileLike() || viewportHeight() <= 520);
 }
 
-function requestMobileFullscreen() {
-  if (!isMobileLike() || document.fullscreenElement) return;
+function requestMobileFullscreen(options = {}) {
+  if (!isMobileLike()) return;
+  const { lockLandscape = viewportWidth() > viewportHeight() } = options;
   const target = document.documentElement;
-  if (target.requestFullscreen) {
-    target.requestFullscreen().catch(() => {});
+  hideMobileBrowserChrome();
+  if (!document.fullscreenElement && target.requestFullscreen) {
+    target.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
   }
-  if (screen.orientation?.lock) {
+  if (lockLandscape && screen.orientation?.lock) {
     screen.orientation.lock("landscape").catch(() => {});
   }
+}
+
+function hideMobileBrowserChrome() {
+  window.scrollTo(0, 1);
+  setTimeout(() => window.scrollTo(0, 1), 80);
+  setTimeout(() => window.scrollTo(0, 1), 260);
 }
 
 function endGame() {
@@ -774,6 +802,11 @@ function syncSettingsUi() {
   ui.musicToggle.classList.toggle("is-off", !settings.music || !settings.sound);
   ui.musicToggle.disabled = !settings.sound;
   ui.musicToggle.querySelector("strong").textContent = settings.sound && settings.music ? "Açık" : "Kapalı";
+  const enginePercent = Math.round(settings.engineVolume * 100);
+  ui.engineVolume.value = String(enginePercent);
+  ui.engineVolume.disabled = !settings.sound;
+  ui.engineVolumeLabel.textContent = `${enginePercent}%`;
+  ui.engineVolumeLabel.classList.toggle("is-off", !settings.sound || enginePercent === 0);
 }
 
 function renderShop() {
@@ -1420,8 +1453,6 @@ function startCrash(obstacle = null) {
   player.grounded = false;
   playSound("crash");
   flashMessage("Kaza!");
-  spawnSpark(hitX, hitY, "#ff5b6e", 30);
-  spawnSpark(player.x + player.w * 0.45, player.y + player.h * 0.72, "#ffb238", 18);
   spawnCrashDust(player.x + player.w * 0.52, WORLD.roadY - 8, 18);
 }
 
@@ -1843,7 +1874,7 @@ function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
     return {
       width: clamp(screenW * 0.25, 136, 188),
       height: 30,
-      y: clamp(screenH * 0.055, 18, 30),
+      y: clamp(screenH * 0.18, 58, 72),
     };
   }
 
@@ -1990,7 +2021,7 @@ function messageLabel(text, mobileLandscape) {
   }
 
   if (text.includes("Kaza")) {
-    return mobileLandscape ? "Kaza!" : "Kaza yaptasdın!";
+    return mobileLandscape ? "Kaza!" : "Kaza yaptın!";
   }
 
   if (text.includes("Teslimat tamam")) {
@@ -2681,6 +2712,8 @@ function intersects(a, b) {
 }
 
 function roundRect(x, y, w, h, r, fill, stroke) {
+  if (w <= 0 || h <= 0) return;
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y);
@@ -2735,7 +2768,7 @@ function unlockAudio() {
 }
 
 function startEngineSound() {
-  if (!settings.sound || !audioUnlocked || !audioCtx) return;
+  if (!settings.sound || settings.engineVolume <= 0 || !audioUnlocked || !audioCtx) return;
   if (audioCtx.state === "suspended") {
     audioCtx.resume();
   }
@@ -2752,7 +2785,7 @@ function startEngineSound() {
   const wobbleGain = audioCtx.createGain();
 
   master.gain.setValueAtTime(0.0001, now);
-  master.gain.linearRampToValueAtTime(0.018, now + 0.28);
+  master.gain.linearRampToValueAtTime(0.018 * settings.engineVolume, now + 0.28);
   piston.type = "triangle";
   body.type = "sine";
   piston.frequency.setValueAtTime(44, now);
@@ -2808,7 +2841,8 @@ function updateEngineSound(dt) {
   const crash = game.crashing ? 1 : 0;
   const base = 38 + speedRatio * 36 + (motor.speed - 1) * 1.1 + turbo * 8 - rain * 5;
   const volume = crash ? 0.01 : 0.014 + speedRatio * 0.012 + turbo * 0.006 - rain * 0.005;
-  engineAudio.master.gain.setTargetAtTime(Math.max(0.006, volume), now, 0.13);
+  const engineVolume = settings.sound ? settings.engineVolume : 0;
+  engineAudio.master.gain.setTargetAtTime(Math.max(0.0001, volume * engineVolume), now, 0.13);
   engineAudio.piston.frequency.setTargetAtTime(Math.max(34, base), now, 0.08);
   engineAudio.body.frequency.setTargetAtTime(Math.max(66, base * 1.85), now, 0.08);
   engineAudio.bodyFilter.frequency.setTargetAtTime(240 + speedRatio * 360 + turbo * 120 - rain * 70, now, 0.14);
@@ -3068,7 +3102,11 @@ function applyAudioSettings() {
     return;
   }
   if (state === "playing") {
-    startEngineSound();
+    if (settings.engineVolume > 0) {
+      startEngineSound();
+    } else {
+      stopEngineSound();
+    }
     if (settings.music) {
       startMusicSound();
     } else {
@@ -3088,6 +3126,7 @@ bindButton(ui.closeShopBtn, () => showScreen("menu"));
 bindButton(ui.backMenuBtn, () => showScreen("menu"));
 bindButton(ui.settingsBtn, openSettings);
 bindButton(ui.closeSettingsBtn, closeSettings);
+bindButton(ui.landscapeStartBtn, beginLandscapeGame, "start");
 bindButton(ui.portraitStartBtn, beginPortraitGame, "start");
 ui.settingsPanel.addEventListener("click", (event) => {
   if (event.target === ui.settingsPanel) closeSettings();
@@ -3105,6 +3144,11 @@ ui.musicToggle.addEventListener("click", () => {
   applyAudioSettings();
   playSound("ui");
 });
+ui.engineVolume.addEventListener("input", () => {
+  unlockAudio();
+  settings.engineVolume = clamp(Number(ui.engineVolume.value) / 100, 0, 1);
+  applyAudioSettings();
+});
 ui.motorsTab.addEventListener("click", () => {
   unlockAudio();
   playSound("ui");
@@ -3119,6 +3163,11 @@ ui.citiesTab.addEventListener("click", () => {
 });
 
 canvas.addEventListener("pointerdown", pointerDown, { passive: false });
+canvas.addEventListener("pointerdown", () => {
+  if (state === "playing") {
+    requestMobileFullscreen({ lockLandscape: viewportWidth() > viewportHeight() });
+  }
+});
 window.addEventListener("pointerup", pointerUp, { passive: false });
 window.addEventListener("pointercancel", pointerUp, { passive: false });
 window.addEventListener("keydown", (event) => {
