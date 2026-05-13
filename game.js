@@ -52,7 +52,7 @@ const WORLD = {
   maxFall: 620,
   startSpeed: 205,
 };
-const MAX_PARTICLES = 130;
+const MAX_PARTICLES = 90;
 const DELIVERY_MILESTONES = [5, 10, 20, 30, 50, 75, 100];
 
 const assets = loadAssets({
@@ -65,7 +65,7 @@ const assets = loadAssets({
   trash: "Asssets/cöpkovasi.png",
   delivery: "Asssets/teslimat.png",
   cloud: "Asssets/bulut.png",
-});
+}, { maxRenderWidth: 640 });
 
 const motorAssets = loadAssets({
   motor1: "Asssets/motors/motor-01.png",
@@ -78,7 +78,7 @@ const motorAssets = loadAssets({
   motor8: "Asssets/motors/motor-08.png",
   motor9: "Asssets/motors/motor-09.png",
   motor10: "Asssets/motors/motor-10.png",
-}, { removeBackground: true, tolerance: 58 });
+}, { removeBackground: true, tolerance: 58, maxRenderWidth: 360 });
 
 const cityAssets = loadAssets({
   istanbul: "Asssets/cities/istanbul.png",
@@ -90,7 +90,7 @@ const cityAssets = loadAssets({
 
 const powerupAssets = loadAssets({
   magnet: "Asssets/powerups/miknatis.png",
-});
+}, { maxRenderWidth: 128 });
 
 const cities = [
   {
@@ -330,6 +330,9 @@ let engineAudio = null;
 let musicAudio = null;
 let pendingLandscapeStart = false;
 const cityBackgroundCache = new Map();
+let canvasPixelWidth = 0;
+let canvasPixelHeight = 0;
+let canvasPixelRatio = 1;
 let camera = {
   scale: 1,
   offsetX: 0,
@@ -496,7 +499,9 @@ function loadAssets(manifest, options = {}) {
     const image = new Image();
     image.onload = () => {
       if (options.removeBackground) {
-        prepareTransparentAsset(image, options.tolerance || 52);
+        prepareTransparentAsset(image, options.tolerance || 52, options.maxRenderWidth || 0);
+      } else {
+        prepareRenderAsset(image, options.maxRenderWidth || 0);
       }
       if (state !== "playing" && ui.shopItems) renderShop();
     };
@@ -509,15 +514,40 @@ function loadAssets(manifest, options = {}) {
   return loaded;
 }
 
-function prepareTransparentAsset(image, tolerance) {
-  const width = image.naturalWidth;
-  const height = image.naturalHeight;
+function prepareRenderAsset(image, maxRenderWidth) {
+  const source = image.processedCanvas || image;
+  const width = source.width || image.naturalWidth;
+  const height = source.height || image.naturalHeight;
+  if (!maxRenderWidth || !width || !height || width <= maxRenderWidth) return;
+  const scale = maxRenderWidth / width;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const renderCtx = canvas.getContext("2d");
+  renderCtx.imageSmoothingEnabled = true;
+  renderCtx.imageSmoothingQuality = "high";
+  renderCtx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  image.renderCanvas = canvas;
+  if (image.processedCanvas) {
+    image.processedSrc = canvas.toDataURL("image/png");
+  }
+}
+
+function prepareTransparentAsset(image, tolerance, maxRenderWidth = 0) {
+  const naturalWidth = image.naturalWidth;
+  const naturalHeight = image.naturalHeight;
+  if (!naturalWidth || !naturalHeight) return;
+  const scale = maxRenderWidth && naturalWidth > maxRenderWidth ? maxRenderWidth / naturalWidth : 1;
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
   if (!width || !height) return;
   const work = document.createElement("canvas");
   work.width = width;
   work.height = height;
   const workCtx = work.getContext("2d", { willReadFrequently: true });
-  workCtx.drawImage(image, 0, 0);
+  workCtx.imageSmoothingEnabled = true;
+  workCtx.imageSmoothingQuality = "high";
+  workCtx.drawImage(image, 0, 0, width, height);
   let pixels;
   try {
     pixels = workCtx.getImageData(0, 0, width, height);
@@ -562,6 +592,7 @@ function prepareTransparentAsset(image, tolerance) {
   softenTransparentEdges(data, width, height);
   workCtx.putImageData(pixels, 0, 0);
   image.processedCanvas = work;
+  image.renderCanvas = work;
   image.processedSrc = work.toDataURL("image/png");
 }
 
@@ -635,12 +666,21 @@ function softenTransparentEdges(data, width, height) {
 }
 
 function resizeCanvas() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dprLimit = isMobileLike() ? 1.5 : 1.75;
+  const dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
   const width = viewportWidth();
   const height = viewportHeight();
+  const pixelWidth = Math.floor(width * dpr);
+  const pixelHeight = Math.floor(height * dpr);
   document.documentElement.style.setProperty("--app-height", `${height}px`);
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
+  if (canvasPixelWidth === pixelWidth && canvasPixelHeight === pixelHeight && canvasPixelRatio === dpr) {
+    return;
+  }
+  canvasPixelWidth = pixelWidth;
+  canvasPixelHeight = pixelHeight;
+  canvasPixelRatio = dpr;
+  canvas.width = pixelWidth;
+  canvas.height = pixelHeight;
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -2335,12 +2375,15 @@ function drawPowerAsset(type, x, y, size) {
   if (!image || !image.complete || image.naturalWidth === 0) {
     return false;
   }
+  const source = renderSource(image);
   const maxW = size * 1.18;
   const maxH = size * 1.18;
-  const ratio = Math.min(maxW / image.naturalWidth, maxH / image.naturalHeight);
-  const w = image.naturalWidth * ratio;
-  const h = image.naturalHeight * ratio;
-  ctx.drawImage(image, x - w / 2, y - h / 2, w, h);
+  const sourceW = source.width || image.naturalWidth;
+  const sourceH = source.height || image.naturalHeight;
+  const ratio = Math.min(maxW / sourceW, maxH / sourceH);
+  const w = sourceW * ratio;
+  const h = sourceH * ratio;
+  ctx.drawImage(source, x - w / 2, y - h / 2, w, h);
   return true;
 }
 
@@ -2603,7 +2646,7 @@ function drawJumpingAssetObstacle(obstacle) {
   ctx.translate(obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2);
   ctx.rotate(obstacle.rotation || 0);
   ctx.scale(1 + (1 - (obstacle.squash || 1)) * 0.55, obstacle.squash || 1);
-  ctx.drawImage(image, -obstacle.w / 2, -obstacle.h / 2, obstacle.w, obstacle.h);
+  ctx.drawImage(renderSource(image), -obstacle.w / 2, -obstacle.h / 2, obstacle.w, obstacle.h);
   ctx.restore();
   return true;
 }
@@ -2700,6 +2743,11 @@ function drawParticles() {
 }
 
 function loop(time) {
+  if (document.hidden) {
+    lastTime = time;
+    requestAnimationFrame(loop);
+    return;
+  }
   const dt = Math.min((time - lastTime) / 1000 || 0, 0.033);
   lastTime = time;
   update(dt);
@@ -2745,7 +2793,7 @@ function drawAsset(name, x, y, w, h) {
 }
 
 function renderSource(image) {
-  return image.processedCanvas || image;
+  return image.renderCanvas || image.processedCanvas || image;
 }
 
 function random(min, max) {
