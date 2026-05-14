@@ -823,6 +823,10 @@ function isIOSLike() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+function isStandaloneApp() {
+  return window.navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches || window.matchMedia?.("(display-mode: fullscreen)").matches;
+}
+
 function shouldUseForcedLandscapeFallback() {
   return isMobileLike() && isIOSLike() && physicalViewportHeight() > physicalViewportWidth();
 }
@@ -841,6 +845,7 @@ function requestMobileFullscreen(options = {}) {
   const { lockLandscape = viewportWidth() > viewportHeight() } = options;
   const target = document.documentElement;
   hideMobileBrowserChrome();
+  if (isIOSLike() && !isStandaloneApp()) return;
   if (!document.fullscreenElement && target.requestFullscreen) {
     target.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
   }

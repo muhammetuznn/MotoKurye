@@ -1,0 +1,19 @@
+{
+  "name": "Kacak Kurye: Son Paket",
+  "short_name": "Kacak Kurye",
+  "description": "Mobil kurye kosu oyunu.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#050915",
+  "theme_color": "#050915",
+  "icons": [
+    {
+      "src": "./Asssets/kurye.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
