@@ -16,6 +16,7 @@ const ui = {
   shopCoins: document.getElementById("shopCoins"),
   shopNotice: document.getElementById("shopNotice"),
   shopItems: document.getElementById("shopItems"),
+  shopTitle: document.getElementById("shopTitle"),
   motorsTab: document.getElementById("motorsTab"),
   citiesTab: document.getElementById("citiesTab"),
   recordsList: document.getElementById("recordsList"),
@@ -52,7 +53,7 @@ const WORLD = {
   maxFall: 620,
   startSpeed: 205,
 };
-const MAX_PARTICLES = 90;
+const MAX_PARTICLES = 64;
 const DELIVERY_MILESTONES = [5, 10, 20, 30, 50, 75, 100];
 
 const assets = loadAssets({
@@ -323,6 +324,10 @@ let lastTime = 0;
 let inputDown = false;
 let game = createGame();
 let shopTab = "motors";
+let shopCarousel = {
+  motors: 0,
+  cities: 0,
+};
 let shopNoticeTimeout = 0;
 let audioCtx = null;
 let audioUnlocked = false;
@@ -485,10 +490,13 @@ function createGame() {
     crashTimer: 0,
     crashDuration: 0,
     screenShake: 0,
-    message: "",
-    messageTimer: 0,
+  message: "",
+  messageTimer: 0,
     messageDuration: 0,
+    recordFlashTimer: 0,
+    nextRecordCheckDistance: 0,
     celebratedMilestones: [],
+  celebratedRecords: [],
     lastObstacleId: "",
     lastAirThreatDistance: 0,
     nearMisses: 0,
@@ -668,7 +676,7 @@ function softenTransparentEdges(data, width, height) {
 }
 
 function resizeCanvas() {
-  const dprLimit = isMobileLike() ? 1.5 : 1.75;
+  const dprLimit = renderDprLimit();
   const dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
   const physicalWidth = physicalViewportWidth();
   const physicalHeight = physicalViewportHeight();
@@ -818,6 +826,20 @@ function isMobileLandscape() {
   return forceLandscapeLayout || (viewportWidth() > viewportHeight() && (isMobileLike() || viewportHeight() <= 520));
 }
 
+function isNativeApp() {
+  return Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+}
+
+function isAndroidLike() {
+  return /Android/i.test(navigator.userAgent);
+}
+
+function renderDprLimit() {
+  if (isNativeApp() && isAndroidLike()) return 1.15;
+  if (isMobileLike()) return 1.3;
+  return 1.75;
+}
+
 function isIOSLike() {
   const platform = navigator.platform || "";
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -911,16 +933,19 @@ function renderShop() {
   ui.shopItems.innerHTML = "";
   ui.motorsTab.classList.toggle("is-active", shopTab === "motors");
   ui.citiesTab.classList.toggle("is-active", shopTab === "cities");
+  ui.shopTitle.textContent = shopTab === "cities" ? "Şehirler" : "Motorlar";
   if (shopTab === "cities") {
     renderCityShop();
     return;
   }
   const motorSection = document.createElement("section");
   motorSection.className = "shop-section";
-  motorSection.innerHTML = `<div class="shop-section-head"><h3>Motorlar</h3><p>Paket rekoru yükseldikçe açılır.</p></div>`;
+  motorSection.innerHTML = `<div class="shop-section-head"><h3>Motor Showroom</h3><p>Yana kaydır, garajdaki motoru seç.</p></div>`;
   const motorGrid = document.createElement("div");
   motorGrid.className = "shop-grid";
-  for (const motor of motors) {
+  shopCarousel.motors = clampCarouselIndex(shopCarousel.motors, motors.length);
+  const visibleMotors = motors.length ? [motors[shopCarousel.motors]] : [];
+  for (const motor of visibleMotors) {
     const packageReady = isMotorUnlocked(motor);
     const owned = save.ownedMotors.includes(motor.id);
     const equipped = save.equippedMotor === motor.id;
@@ -990,7 +1015,12 @@ function renderShop() {
     card.appendChild(button);
     motorGrid.appendChild(card);
   }
-  motorSection.appendChild(motorGrid);
+  motorSection.appendChild(createShopCarousel(
+    motorGrid,
+    "Motor değiştir",
+    () => changeShopCarousel("motors", -1, motors.length),
+    () => changeShopCarousel("motors", 1, motors.length)
+  ));
   ui.shopItems.appendChild(motorSection);
 }
 
@@ -1004,10 +1034,12 @@ function motorButtonLabel(owned, equipped, packageReady, canBuy) {
 function renderCityShop() {
   const citySection = document.createElement("section");
   citySection.className = "shop-section";
-  citySection.innerHTML = `<div class="shop-section-head"><h3>Şehirler</h3><p>Pahalı şehir temaları coin ile açılır.</p></div>`;
+  citySection.innerHTML = `<div class="shop-section-head"><h3>Şehir Showroom</h3><p>Yana kaydır, sahneyi değiştir.</p></div>`;
   const cityGrid = document.createElement("div");
   cityGrid.className = "shop-grid city-grid";
-  for (const city of cities) {
+  shopCarousel.cities = clampCarouselIndex(shopCarousel.cities, cities.length);
+  const visibleCities = cities.length ? [cities[shopCarousel.cities]] : [];
+  for (const city of visibleCities) {
     const owned = save.ownedCities.includes(city.id);
     const equipped = save.equippedCity === city.id;
     const canBuy = save.coins >= city.price;
@@ -1065,8 +1097,71 @@ function renderCityShop() {
     card.appendChild(button);
     cityGrid.appendChild(card);
   }
-  citySection.appendChild(cityGrid);
+  citySection.appendChild(createShopCarousel(
+    cityGrid,
+    "Şehir değiştir",
+    () => changeShopCarousel("cities", -1, cities.length),
+    () => changeShopCarousel("cities", 1, cities.length)
+  ));
   ui.shopItems.appendChild(citySection);
+}
+
+function createShopCarousel(grid, label, onPrev, onNext) {
+  const carousel = document.createElement("div");
+  carousel.className = "shop-carousel";
+  grid.tabIndex = 0;
+  grid.setAttribute("aria-label", label);
+  let swipeStartX = 0;
+
+  const prev = document.createElement("button");
+  prev.className = "carousel-arrow carousel-prev";
+  prev.type = "button";
+  prev.textContent = "‹";
+  prev.title = "Önceki";
+
+  const next = document.createElement("button");
+  next.className = "carousel-arrow carousel-next";
+  next.type = "button";
+  next.textContent = "›";
+  next.title = "Sonraki";
+
+  prev.addEventListener("click", onPrev);
+  next.addEventListener("click", onNext);
+  grid.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    if (event.key === "ArrowRight") {
+      onNext();
+    } else {
+      onPrev();
+    }
+  });
+  grid.addEventListener("pointerdown", (event) => {
+    swipeStartX = event.clientX;
+  });
+  grid.addEventListener("pointerup", (event) => {
+    const delta = event.clientX - swipeStartX;
+    if (Math.abs(delta) < 42) return;
+    if (delta < 0) {
+      onNext();
+    } else {
+      onPrev();
+    }
+  });
+
+  carousel.append(prev, grid, next);
+  return carousel;
+}
+
+function clampCarouselIndex(index, length) {
+  if (length <= 0) return 0;
+  return Math.max(0, Math.min(index, length - 1));
+}
+
+function changeShopCarousel(type, direction, length) {
+  if (length <= 0) return;
+  shopCarousel[type] = (shopCarousel[type] + direction + length) % length;
+  renderShop();
 }
 
 function renderRecords() {
@@ -1145,7 +1240,6 @@ function update(dt) {
   updateEngineSound(dt);
   g.distance += (g.speed * dt) / 8;
   g.score = Math.floor(g.distance) + g.runCoins * 5 + g.deliveries * 100;
-
   if (g.player.rainTimer > 0) {
     g.player.rainTimer -= dt;
   }
@@ -1235,8 +1329,13 @@ function tickPowerups(dt) {
 function moveAndCull(items, dt) {
   for (const item of items) {
     item.x -= game.speed * dt;
+    item.motionTime = (item.motionTime || 0) + dt;
     if (item.jumper) {
       updateJumpingObstacle(item, dt);
+    } else if (item.id === "door") {
+      const wobble = Math.sin(item.motionTime * 9.5 + item.phase);
+      item.y = item.baseY + wobble * 3.4;
+      item.rotation = wobble * 0.025;
     }
     if (item.wave) {
       item.y = item.baseY + Math.sin(performance.now() / 320 + item.phase) * item.wave;
@@ -1300,6 +1399,7 @@ function spawnObstacle() {
     jumpSpeed,
     jumpHeight,
     jumpTime,
+    motionTime: 0,
     rotation: 0,
     squash: 1,
     phase: random(0, Math.PI * 2),
@@ -1672,19 +1772,28 @@ function render() {
   camera = computeCamera();
   const screenW = viewportWidth();
   const screenH = viewportHeight();
-  ctx.save();
+  resetCanvasTransform();
   ctx.clearRect(0, 0, screenW, screenH);
   ctx.fillStyle = "#071327";
   ctx.fillRect(0, 0, screenW, screenH);
-  if (game.screenShake > 0) {
-    const shake = game.screenShake * 18;
-    ctx.translate(random(-shake, shake), random(-shake, shake));
+  ctx.save();
+  try {
+    if (game.screenShake > 0) {
+      const shake = game.screenShake * 18;
+      ctx.translate(random(-shake, shake), random(-shake, shake));
+    }
+    ctx.translate(camera.offsetX, camera.offsetY);
+    ctx.scale(camera.scale, camera.scale);
+    drawWorld();
+  } finally {
+    ctx.restore();
   }
-  ctx.translate(camera.offsetX, camera.offsetY);
-  ctx.scale(camera.scale, camera.scale);
-  drawWorld();
-  ctx.restore();
-  drawScreenHud();
+  resetCanvasTransform();
+  try {
+    drawScreenHud();
+  } catch (error) {
+    console.error("HUD render error", error);
+  }
 }
 
 function computeCamera() {
@@ -1893,6 +2002,7 @@ function drawScreenHud() {
     drawSpeedGauge(safeCenter - speedW / 2, top, speedW, pillH, currentSpeedKmh(), true);
     drawMetricPill(screenW - padRight - smallW, top, smallW, pillH, "coin", game.runCoins, "#ffd166");
     drawScreenPowerHud(padLeft, top + pillH + gap);
+    drawRecordPanel(screenW - padRight - 132, top + pillH + gap, 132, 32, true);
   } else if (compact) {
     drawMetricPill(padLeft, top, 134, pillH, "distance", `${Math.floor(game.distance)} m`);
     drawSpeedGauge(screenW - padRight - 112, top, 112, pillH, currentSpeedKmh(), true);
@@ -1918,6 +2028,7 @@ function drawScreenHud() {
     );
 
     drawScreenPowerHud(padLeft, top + (pillH + gap) * 2);
+    drawRecordPanel(screenW - padRight - 132, top + pillH + gap, 132, 32, true);
   } else {
     drawMetricPill(padLeft, top, 178, 42, "distance", `${Math.floor(game.distance)} m`);
     drawSpeedGauge(screenW / 2 - 88, safe.top + 12, 176, 52, currentSpeedKmh(), false);
@@ -1943,6 +2054,7 @@ function drawScreenHud() {
     );
 
     drawScreenPowerHud(padLeft, safe.top + 66);
+    drawRecordPanel(screenW - safe.right - 178, safe.top + 66, 160, 42, false);
   }
 
   if (game.messageTimer > 0) {
@@ -2005,6 +2117,24 @@ function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
   };
 }
 
+function drawRecordPanel(x, y, w, h, compact) {
+  const bestPackages = Math.max(Math.floor(save.bestPackages || 0), game.deliveries);
+  const packagesNew = game.deliveries > Math.floor(save.bestPackages || 0);
+  const border = packagesNew ? "rgba(255, 178, 56, 0.72)" : "rgba(255,255,255,0.14)";
+  ctx.save();
+  roundRect(x, y, w, h, 8, "rgba(4, 9, 18, 0.66)", border);
+  ctx.fillStyle = "rgba(249,251,255,0.62)";
+  ctx.font = `800 ${compact ? 8 : 10}px system-ui`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("REKOR", x + 10, y + h / 2);
+  ctx.fillStyle = packagesNew ? "#ffb238" : "#f9fbff";
+  ctx.textAlign = "right";
+  ctx.font = `900 ${compact ? 12 : 14}px system-ui`;
+  ctx.fillText(`${bestPackages} paket`, x + w - 10, y + h / 2);
+  ctx.restore();
+}
+
 function safeAreaInsets() {
   const styles = getComputedStyle(document.documentElement);
   return {
@@ -2065,9 +2195,11 @@ function drawMessageToast(x, y, width, height, text, compact, mobileLandscape, a
 
   ctx.globalAlpha = alpha;
 
-  ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = compact ? 8 : 13;
-  ctx.shadowOffsetY = 3;
+  if (!isNativeApp() || !isMobileLike()) {
+    ctx.shadowColor = palette.glow;
+    ctx.shadowBlur = compact ? 8 : 13;
+    ctx.shadowOffsetY = 3;
+  }
 
   roundRect(
     x,
@@ -2137,6 +2269,7 @@ function drawMessageToast(x, y, width, height, text, compact, mobileLandscape, a
 function messageType(text) {
   if (text.includes("Kaza")) return "danger";
   if (text.includes("sıyrılma")) return "skill";
+  if (text.includes("rekoru")) return "milestone";
   if (text.includes("paket attın")) return "milestone";
   if (text.includes("Teslimat")) return "delivery";
   return "delivery";
@@ -2236,15 +2369,19 @@ function drawToastIcon(type, cx, cy, size, accent) {
 }
 
 function drawMetricPill(x, y, w, h, icon, value, accent) {
-  roundRect(x, y, w, h, 8, "rgba(4, 9, 18, 0.72)", accent || "rgba(255,255,255,0.14)");
-  const iconSize = h - 14;
-  drawHudIcon(icon, x + 18, y + h / 2, iconSize, accent);
-  ctx.fillStyle = "#f9fbff";
-  ctx.font = `900 ${viewportWidth() < 560 || isMobileLandscape() ? 14 : 18}px system-ui`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(value), x + 34, y + h / 2 + 1);
-  ctx.textBaseline = "alphabetic";
+  ctx.save();
+  try {
+    roundRect(x, y, w, h, 8, "rgba(4, 9, 18, 0.72)", accent || "rgba(255,255,255,0.14)");
+    const iconSize = h - 14;
+    drawHudIcon(icon, x + 18, y + h / 2, iconSize, accent);
+    ctx.fillStyle = "#f9fbff";
+    ctx.font = `900 ${viewportWidth() < 560 || isMobileLandscape() ? 14 : 18}px system-ui`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(value), x + 34, y + h / 2 + 1);
+  } finally {
+    ctx.restore();
+  }
 }
 
 
@@ -2302,54 +2439,53 @@ function drawSpeedGauge(x, y, w, h, speed, compact) {
 
 function drawHudIcon(type, x, y, size, accent) {
   ctx.save();
-  ctx.translate(x, y);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.lineWidth = Math.max(1.8, size * 0.1);
-  if (type === "distance") {
-    ctx.strokeStyle = accent || "#f9fbff";
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.38, size * 0.34);
-    ctx.lineTo(-size * 0.08, -size * 0.34);
-    ctx.lineTo(size * 0.18, size * 0.34);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(size * 0.24, -size * 0.22, size * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  } else if (type === "package") {
-    ctx.fillStyle = "#f2a93b";
-    ctx.strokeStyle = "#5a3307";
-    ctx.beginPath();
-    ctx.rect(-size * 0.36, -size * 0.28, size * 0.72, size * 0.58);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(90,51,7,0.7)";
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.28);
-    ctx.lineTo(0, size * 0.3);
-    ctx.moveTo(-size * 0.36, -size * 0.02);
-    ctx.lineTo(size * 0.36, -size * 0.02);
-    ctx.stroke();
-  } else if (type === "coin") {
-    const coinGradient = ctx.createRadialGradient(-size * 0.16, -size * 0.18, 2, 0, 0, size * 0.46);
-    coinGradient.addColorStop(0, "#fff2a8");
-    coinGradient.addColorStop(0.55, "#ffd166");
-    coinGradient.addColorStop(1, "#c98513");
-    ctx.fillStyle = coinGradient;
-    ctx.strokeStyle = "#6b3d03";
-    ctx.beginPath();
-    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.65)";
-    ctx.lineWidth = Math.max(1.4, size * 0.07);
-    ctx.beginPath();
-    ctx.arc(-size * 0.06, -size * 0.06, size * 0.18, Math.PI * 0.88, Math.PI * 1.62);
-    ctx.stroke();
+  try {
+    ctx.translate(x, y);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(2, size * 0.12);
+    if (type === "distance") {
+      ctx.strokeStyle = accent || "#f9fbff";
+      ctx.fillStyle = accent || "#f9fbff";
+      ctx.beginPath();
+      ctx.arc(-size * 0.24, size * 0.18, size * 0.12, 0, Math.PI * 2);
+      ctx.arc(size * 0.24, -size * 0.18, size * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.14, size * 0.1);
+      ctx.lineTo(size * 0.14, -size * 0.1);
+      ctx.stroke();
+    } else if (type === "package") {
+      ctx.fillStyle = accent || "#ffb238";
+      ctx.strokeStyle = "rgba(17,24,39,0.85)";
+      ctx.beginPath();
+      ctx.rect(-size * 0.34, -size * 0.26, size * 0.68, size * 0.54);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(17,24,39,0.55)";
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 0.28);
+      ctx.lineTo(0, size * 0.28);
+      ctx.moveTo(-size * 0.34, -size * 0.02);
+      ctx.lineTo(size * 0.34, -size * 0.02);
+      ctx.stroke();
+    } else if (type === "coin") {
+      ctx.fillStyle = accent || "#ffd166";
+      ctx.strokeStyle = "rgba(107,61,3,0.9)";
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(107,61,3,0.58)";
+      ctx.lineWidth = Math.max(1.4, size * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 0.18);
+      ctx.lineTo(0, size * 0.18);
+      ctx.stroke();
+    }
+  } finally {
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 function currentSpeedKmh() {
@@ -2701,6 +2837,9 @@ function drawAssetObstacle(obstacle) {
   if (obstacle.jumper) {
     return drawJumpingAssetObstacle(obstacle);
   }
+  if (obstacle.id === "door") {
+    return drawDoorAssetObstacle(obstacle);
+  }
   const bob = obstacle.id === "seagull" ? Math.sin(performance.now() / 140) * 4 : 0;
   const ok = drawAsset(obstacle.asset, obstacle.x, obstacle.y + bob, obstacle.w, obstacle.h);
   if (ok && obstacle.id === "cloud") {
@@ -2714,6 +2853,22 @@ function drawAssetObstacle(obstacle) {
     ctx.restore();
   }
   return ok;
+}
+
+function drawDoorAssetObstacle(obstacle) {
+  const image = assets[obstacle.asset];
+  if (!image || !image.complete || image.naturalWidth === 0) {
+    return false;
+  }
+  const source = renderSource(image);
+  const wobble = Math.sin((obstacle.motionTime || 0) * 9.5 + obstacle.phase);
+  ctx.save();
+  ctx.translate(obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2);
+  ctx.rotate(obstacle.rotation || 0);
+  ctx.translate(wobble * 1.6, 0);
+  ctx.drawImage(source, -obstacle.w / 2, -obstacle.h / 2, obstacle.w, obstacle.h);
+  ctx.restore();
+  return true;
 }
 
 function drawJumpingAssetObstacle(obstacle) {
@@ -2837,9 +2992,24 @@ function loop(time) {
   }
   const dt = Math.min((time - lastTime) / 1000 || 0, 0.033);
   lastTime = time;
-  update(dt);
-  render();
+  try {
+    update(dt);
+    render();
+  } catch (error) {
+    console.error("Game loop error", error);
+    resetCanvasTransform();
+  }
   requestAnimationFrame(loop);
+}
+
+function resetCanvasTransform() {
+  ctx.setTransform(canvasPixelRatio || 1, 0, 0, canvasPixelRatio || 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.filter = "none";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.setLineDash([]);
 }
 
 function intersects(a, b) {
