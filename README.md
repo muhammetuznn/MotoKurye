@@ -14,6 +14,29 @@ Sonra tarayıcıda `http://127.0.0.1:4173/` adresini açın.
 
 İsterseniz `index.html` dosyasını doğrudan tarayıcıda da açabilirsiniz. Oyun bağımlılıksız HTML, CSS ve Canvas ile çalışır.
 
+## Android / Play Store
+
+Android uygulaması Capacitor ile paketlenir.
+
+```bash
+npm install
+npm run cap:sync
+```
+
+Debug APK:
+
+```bash
+npm run android:debug
+```
+
+Play Store için release AAB:
+
+```bash
+npm run android:bundle
+```
+
+Release imza ve keystore adımları için `PLAY_STORE.md` dosyasına bakın.
+
 ## Kontrol
 
 - Mouse/touch basılı tut: kurye yükselir.

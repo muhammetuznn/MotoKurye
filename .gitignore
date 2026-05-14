@@ -1,0 +1,18 @@
+node_modules/
+www/
+dist/
+.capacitor/
+
+# Android build output
+android/.gradle/
+android/app/build/
+android/build/
+android/captures/
+android/keystore.properties
+android/*.jks
+android/*.keystore
+
+# Local environment
+.env
+.DS_Store
+Thumbs.db
