@@ -60,6 +60,16 @@ button:hover {
   overflow: hidden;
 }
 
+html.force-landscape .app-shell {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: var(--app-height, 100dvh);
+  height: var(--app-width, 100vw);
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}
+
 #game {
   display: block;
   width: 100%;

@@ -83,11 +83,11 @@ Bu dosyalar yoksa market renkli placeholder gösterir. Dosyaları ekleyip sayfay
 
 Hazır şehir görsel yolları:
 
-- `Asssets/cities/istanbul.png`
-- `Asssets/cities/new-york.png`
-- `Asssets/cities/mexico-city.png`
-- `Asssets/cities/tokyo.png`
-- `Asssets/cities/dubai.png`
+- `Asssets/cities/istanbul.jpg`
+- `Asssets/cities/new-york.jpg`
+- `Asssets/cities/mexico-city.jpg`
+- `Asssets/cities/tokyo.jpg`
+- `Asssets/cities/dubai.jpg`
 
 ## Asset Eşleşmesi
 

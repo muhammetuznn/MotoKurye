@@ -81,11 +81,11 @@ const motorAssets = loadAssets({
 }, { removeBackground: true, tolerance: 58, maxRenderWidth: 360 });
 
 const cityAssets = loadAssets({
-  istanbul: "Asssets/cities/istanbul.png",
-  newYork: "Asssets/cities/new-york.png",
-  mexicoCity: "Asssets/cities/mexico-city.png",
-  tokyo: "Asssets/cities/tokyo.png",
-  dubai: "Asssets/cities/dubai.png",
+  istanbul: "Asssets/cities/istanbul.jpg",
+  newYork: "Asssets/cities/new-york.jpg",
+  mexicoCity: "Asssets/cities/mexico-city.jpg",
+  tokyo: "Asssets/cities/tokyo.jpg",
+  dubai: "Asssets/cities/dubai.jpg",
 });
 
 const powerupAssets = loadAssets({
@@ -329,6 +329,7 @@ let audioUnlocked = false;
 let engineAudio = null;
 let musicAudio = null;
 let pendingLandscapeStart = false;
+let forceLandscapeLayout = false;
 const cityBackgroundCache = new Map();
 let canvasPixelWidth = 0;
 let canvasPixelHeight = 0;
@@ -669,11 +670,14 @@ function softenTransparentEdges(data, width, height) {
 function resizeCanvas() {
   const dprLimit = isMobileLike() ? 1.5 : 1.75;
   const dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
+  const physicalWidth = physicalViewportWidth();
+  const physicalHeight = physicalViewportHeight();
   const width = viewportWidth();
   const height = viewportHeight();
   const pixelWidth = Math.floor(width * dpr);
   const pixelHeight = Math.floor(height * dpr);
-  document.documentElement.style.setProperty("--app-height", `${height}px`);
+  document.documentElement.style.setProperty("--app-width", `${physicalWidth}px`);
+  document.documentElement.style.setProperty("--app-height", `${physicalHeight}px`);
   if (canvasPixelWidth === pixelWidth && canvasPixelHeight === pixelHeight && canvasPixelRatio === dpr) {
     return;
   }
@@ -696,6 +700,9 @@ function toWorldY(y) {
 }
 
 function showScreen(name) {
+  if (name === "menu" || name === "shop") {
+    setForcedLandscapeLayout(false);
+  }
   for (const [key, element] of Object.entries(screens)) {
     element.classList.toggle("is-visible", key === name);
   }
@@ -736,6 +743,7 @@ function beginGame() {
 }
 
 function beginPortraitGame() {
+  setForcedLandscapeLayout(false);
   pendingLandscapeStart = false;
   ui.orientationPanel.classList.remove("is-visible");
   requestMobileFullscreen({ lockLandscape: false });
@@ -746,6 +754,12 @@ function beginLandscapeGame() {
   unlockAudio();
   requestMobileFullscreen({ lockLandscape: true });
   if (viewportWidth() > viewportHeight()) {
+    setForcedLandscapeLayout(false);
+    beginGame();
+    return;
+  }
+  if (shouldUseForcedLandscapeFallback()) {
+    setForcedLandscapeLayout(true);
     beginGame();
     return;
   }
@@ -755,7 +769,7 @@ function beginLandscapeGame() {
 }
 
 function shouldPromptLandscape() {
-  return isMobileLike() && viewportWidth() < 820 && viewportHeight() > viewportWidth();
+  return !forceLandscapeLayout && isMobileLike() && viewportWidth() < 820 && viewportHeight() > viewportWidth();
 }
 
 function handleViewportChange() {
@@ -767,6 +781,10 @@ function handleViewportChange() {
 }
 
 function applyViewportChange() {
+  if (forceLandscapeLayout && physicalViewportWidth() > physicalViewportHeight()) {
+    setForcedLandscapeLayout(false);
+    return;
+  }
   resizeCanvas();
   if (state === "playing") {
     hideMobileBrowserChrome();
@@ -777,10 +795,18 @@ function applyViewportChange() {
 }
 
 function viewportWidth() {
-  return Math.floor(window.visualViewport?.width || window.innerWidth);
+  return forceLandscapeLayout ? physicalViewportHeight() : physicalViewportWidth();
 }
 
 function viewportHeight() {
+  return forceLandscapeLayout ? physicalViewportWidth() : physicalViewportHeight();
+}
+
+function physicalViewportWidth() {
+  return Math.floor(window.visualViewport?.width || window.innerWidth);
+}
+
+function physicalViewportHeight() {
   return Math.floor(window.visualViewport?.height || window.innerHeight);
 }
 
@@ -789,7 +815,25 @@ function isMobileLike() {
 }
 
 function isMobileLandscape() {
-  return viewportWidth() > viewportHeight() && (isMobileLike() || viewportHeight() <= 520);
+  return forceLandscapeLayout || (viewportWidth() > viewportHeight() && (isMobileLike() || viewportHeight() <= 520));
+}
+
+function isIOSLike() {
+  const platform = navigator.platform || "";
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function shouldUseForcedLandscapeFallback() {
+  return isMobileLike() && isIOSLike() && physicalViewportHeight() > physicalViewportWidth();
+}
+
+function setForcedLandscapeLayout(enabled) {
+  if (forceLandscapeLayout === enabled) return;
+  forceLandscapeLayout = enabled;
+  document.documentElement.classList.toggle("force-landscape", enabled);
+  canvasPixelWidth = 0;
+  canvasPixelHeight = 0;
+  resizeCanvas();
 }
 
 function requestMobileFullscreen(options = {}) {
