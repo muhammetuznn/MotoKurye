@@ -333,6 +333,7 @@ const cityBackgroundCache = new Map();
 let canvasPixelWidth = 0;
 let canvasPixelHeight = 0;
 let canvasPixelRatio = 1;
+let viewportResizeRaf = 0;
 let camera = {
   scale: 1,
   offsetX: 0,
@@ -758,9 +759,17 @@ function shouldPromptLandscape() {
 }
 
 function handleViewportChange() {
+  if (viewportResizeRaf) return;
+  viewportResizeRaf = requestAnimationFrame(() => {
+    viewportResizeRaf = 0;
+    applyViewportChange();
+  });
+}
+
+function applyViewportChange() {
   resizeCanvas();
   if (state === "playing") {
-    requestMobileFullscreen({ lockLandscape: viewportWidth() > viewportHeight() });
+    hideMobileBrowserChrome();
   }
   if (pendingLandscapeStart && !shouldPromptLandscape()) {
     beginGame();
@@ -1814,20 +1823,33 @@ function drawScreenHud() {
 
   const screenW = viewportWidth();
   const screenH = viewportHeight();
+  const safe = safeAreaInsets();
   const mobileLandscape = isMobileLandscape();
   const compact = screenW < 560 || mobileLandscape;
 
-  const pad = compact ? 10 : 18;
-  const top = compact ? Math.max(8, Math.round(screenH * 0.025)) : 16;
+  const basePad = compact ? 10 : 18;
+  const padLeft = basePad + safe.left;
+  const padRight = basePad + safe.right;
+  const top = safe.top + (compact ? Math.max(8, Math.round(screenH * 0.025)) : 16);
   const pillH = compact ? 32 : 42;
   const gap = compact ? 7 : 10;
 
-  if (compact) {
-    drawMetricPill(pad, top, 134, pillH, "distance", `${Math.floor(game.distance)} m`);
-    drawSpeedGauge(screenW - pad - 112, top, 112, pillH, currentSpeedKmh(), true);
+  if (mobileLandscape) {
+    const metricW = clamp(screenW * 0.16, 94, 122);
+    const smallW = clamp(screenW * 0.105, 72, 88);
+    const speedW = clamp(screenW * 0.16, 104, 126);
+    const safeCenter = safe.left + (screenW - safe.left - safe.right) / 2;
+    drawMetricPill(padLeft, top, metricW, pillH, "distance", `${Math.floor(game.distance)} m`);
+    drawMetricPill(padLeft + metricW + gap, top, smallW, pillH, "package", game.deliveries, "#ffb238");
+    drawSpeedGauge(safeCenter - speedW / 2, top, speedW, pillH, currentSpeedKmh(), true);
+    drawMetricPill(screenW - padRight - smallW, top, smallW, pillH, "coin", game.runCoins, "#ffd166");
+    drawScreenPowerHud(padLeft, top + pillH + gap);
+  } else if (compact) {
+    drawMetricPill(padLeft, top, 134, pillH, "distance", `${Math.floor(game.distance)} m`);
+    drawSpeedGauge(screenW - padRight - 112, top, 112, pillH, currentSpeedKmh(), true);
 
     drawMetricPill(
-      pad,
+      padLeft,
       top + pillH + gap,
       102,
       pillH,
@@ -1837,7 +1859,7 @@ function drawScreenHud() {
     );
 
     drawMetricPill(
-      screenW - pad - 94,
+      screenW - padRight - 94,
       top + pillH + gap,
       94,
       pillH,
@@ -1846,14 +1868,14 @@ function drawScreenHud() {
       "#ffd166"
     );
 
-    drawScreenPowerHud(pad, top + (pillH + gap) * 2);
+    drawScreenPowerHud(padLeft, top + (pillH + gap) * 2);
   } else {
-    drawMetricPill(18, 16, 178, 42, "distance", `${Math.floor(game.distance)} m`);
-    drawSpeedGauge(screenW / 2 - 88, 12, 176, 52, currentSpeedKmh(), false);
+    drawMetricPill(padLeft, top, 178, 42, "distance", `${Math.floor(game.distance)} m`);
+    drawSpeedGauge(screenW / 2 - 88, safe.top + 12, 176, 52, currentSpeedKmh(), false);
 
     drawMetricPill(
-      screenW - 302,
-      16,
+      screenW - safe.right - 302,
+      top,
       122,
       42,
       "package",
@@ -1862,8 +1884,8 @@ function drawScreenHud() {
     );
 
     drawMetricPill(
-      screenW - 164,
-      16,
+      screenW - safe.right - 164,
+      top,
       146,
       42,
       "coin",
@@ -1871,7 +1893,7 @@ function drawScreenHud() {
       "#ffd166"
     );
 
-    drawScreenPowerHud(18, 66);
+    drawScreenPowerHud(padLeft, safe.top + 66);
   }
 
   if (game.messageTimer > 0) {
@@ -1879,7 +1901,8 @@ function drawScreenHud() {
     const width = banner.width;
     const height = banner.height;
 
-    const x = screenW / 2 - width / 2;
+    const safeCenter = safe.left + (screenW - safe.left - safe.right) / 2;
+    const x = safeCenter - width / 2;
     const y = banner.y;
 
     const duration = game.messageDuration || 1.4;
@@ -1931,6 +1954,21 @@ function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
     height: 38,
     y: 72,
   };
+}
+
+function safeAreaInsets() {
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    top: cssPx(styles.getPropertyValue("--safe-top")),
+    right: cssPx(styles.getPropertyValue("--safe-right")),
+    bottom: cssPx(styles.getPropertyValue("--safe-bottom")),
+    left: cssPx(styles.getPropertyValue("--safe-left")),
+  };
+}
+
+function cssPx(value) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function drawMessageToast(x, y, width, height, text, compact, mobileLandscape, alpha, life) {
