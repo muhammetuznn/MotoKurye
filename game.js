@@ -959,6 +959,13 @@ function renderShop() {
     const packageProgress = motor.unlockPackages === 0 ? 100 : clamp((save.bestPackages / motor.unlockPackages) * 100, 0, 100);
     const coinProgress = motor.price === 0 ? 100 : clamp((save.coins / motor.price) * 100, 0, 100);
     const remaining = Math.max(0, motor.unlockPackages - save.bestPackages);
+    const packageTargetLabel = motor.unlockPackages === 0 ? "Paket şartı yok" : "Gereken paket rekoru";
+    const packageTargetValue = motor.unlockPackages === 0 ? "Hazır" : `${formatNumber(motor.unlockPackages)} paket`;
+    const packageProgressText = motor.unlockPackages === 0
+      ? "Başlangıç motoru"
+      : packageReady
+        ? `Tamam: ${formatNumber(save.bestPackages)} paket`
+        : `${formatNumber(remaining)} paket kaldı · ${formatNumber(save.bestPackages)} / ${formatNumber(motor.unlockPackages)}`;
     card.innerHTML = `
       <div class="motor-preview" style="background: linear-gradient(135deg, ${motor.color}22, ${motor.accent}33);">${preview}</div>
       <div class="motor-title-row">
@@ -968,11 +975,11 @@ function renderShop() {
       <p>${motor.desc}</p>
       <div class="unlock-box">
         <div class="unlock-copy">
-          <span>${packageReady ? "Paket şartı tamam" : "Paket rekoru şartı"}</span>
-          <strong>${packageReady ? `${formatNumber(save.bestPackages)} paket` : `${formatNumber(remaining)} paket kaldı`}</strong>
+          <span>${packageTargetLabel}</span>
+          <strong>${packageTargetValue}</strong>
         </div>
         <div class="unlock-progress"><span style="width:${packageProgress}%"></span></div>
-        <small>${formatNumber(Math.min(save.bestPackages, motor.unlockPackages))} / ${formatNumber(motor.unlockPackages)} paket</small>
+        <small>${packageProgressText}</small>
         <div class="unlock-copy">
           <span>${owned ? "Garajda" : "Satın alma bedeli"}</span>
           <strong>${owned ? "Kalıcı" : `${formatNumber(motor.price)} coin`}</strong>
@@ -1174,7 +1181,7 @@ function renderRecords() {
   ui.recordsList.innerHTML = records
     .map((record, index) => {
       const motor = motors.find((item) => item.id === record.motor) || motors[0];
-      return `<div class="record-row"><span>#${index + 1}</span><strong>${record.packages} paket</strong><span>${record.distance} m · ${motor.name}</span></div>`;
+      return `<div class="record-row"><span>#${index + 1}</span><strong>${formatNumber(record.packages)} paket</strong><span>${formatNumber(record.distance)} m · ${motor.name}</span></div>`;
     })
     .join("");
 }
@@ -1991,71 +1998,12 @@ function drawScreenHud() {
   const top = safe.top + (compact ? Math.max(8, Math.round(screenH * 0.025)) : 16);
   const pillH = compact ? 32 : 42;
   const gap = compact ? 7 : 10;
-
-  if (mobileLandscape) {
-    const metricW = clamp(screenW * 0.16, 94, 122);
-    const smallW = clamp(screenW * 0.105, 72, 88);
-    const speedW = clamp(screenW * 0.16, 104, 126);
-    const safeCenter = safe.left + (screenW - safe.left - safe.right) / 2;
-    drawMetricPill(padLeft, top, metricW, pillH, "distance", `${Math.floor(game.distance)} m`);
-    drawMetricPill(padLeft + metricW + gap, top, smallW, pillH, "package", game.deliveries, "#ffb238");
-    drawSpeedGauge(safeCenter - speedW / 2, top, speedW, pillH, currentSpeedKmh(), true);
-    drawMetricPill(screenW - padRight - smallW, top, smallW, pillH, "coin", game.runCoins, "#ffd166");
-    drawScreenPowerHud(padLeft, top + pillH + gap);
-    drawRecordPanel(screenW - padRight - 132, top + pillH + gap, 132, 32, true);
-  } else if (compact) {
-    drawMetricPill(padLeft, top, 134, pillH, "distance", `${Math.floor(game.distance)} m`);
-    drawSpeedGauge(screenW - padRight - 112, top, 112, pillH, currentSpeedKmh(), true);
-
-    drawMetricPill(
-      padLeft,
-      top + pillH + gap,
-      102,
-      pillH,
-      "package",
-      game.deliveries,
-      "#ffb238"
-    );
-
-    drawMetricPill(
-      screenW - padRight - 94,
-      top + pillH + gap,
-      94,
-      pillH,
-      "coin",
-      game.runCoins,
-      "#ffd166"
-    );
-
-    drawScreenPowerHud(padLeft, top + (pillH + gap) * 2);
-    drawRecordPanel(screenW - padRight - 132, top + pillH + gap, 132, 32, true);
-  } else {
-    drawMetricPill(padLeft, top, 178, 42, "distance", `${Math.floor(game.distance)} m`);
-    drawSpeedGauge(screenW / 2 - 88, safe.top + 12, 176, 52, currentSpeedKmh(), false);
-
-    drawMetricPill(
-      screenW - safe.right - 302,
-      top,
-      122,
-      42,
-      "package",
-      game.deliveries,
-      "#ffb238"
-    );
-
-    drawMetricPill(
-      screenW - safe.right - 164,
-      top,
-      146,
-      42,
-      "coin",
-      game.runCoins,
-      "#ffd166"
-    );
-
-    drawScreenPowerHud(padLeft, safe.top + 66);
-    drawRecordPanel(screenW - safe.right - 178, safe.top + 66, 160, 42, false);
-  }
+  const stripH = compact ? 42 : 50;
+  const availableW = screenW - padLeft - padRight;
+  const stripW = compact ? availableW : Math.min(availableW, 820);
+  const stripX = padLeft + (availableW - stripW) / 2;
+  drawHudStrip(stripX, top, stripW, stripH);
+  drawScreenPowerHud(stripX, top + stripH + gap);
 
   if (game.messageTimer > 0) {
     const banner = messageBannerLayout(screenW, screenH, compact, mobileLandscape);
@@ -2133,6 +2081,112 @@ function drawRecordPanel(x, y, w, h, compact) {
   ctx.font = `900 ${compact ? 12 : 14}px system-ui`;
   ctx.fillText(`${bestPackages} paket`, x + w - 10, y + h / 2);
   ctx.restore();
+}
+
+function drawHudStrip(x, y, w, h) {
+  const bestPackages = Math.max(Math.floor(save.bestPackages || 0), game.deliveries);
+  const packagesNew = game.deliveries > Math.floor(save.bestPackages || 0);
+  const speed = currentSpeedKmh();
+  const speedAccent = speed > 125 ? "#ff5b6e" : speed > 95 ? "#ffb238" : "#44d7b6";
+  const tight = w < 480;
+  const items = [
+    { icon: "distance", label: "Yol", value: formatHudDistance(game.distance), accent: "#f9fbff", weight: 1.24 },
+    { icon: "package", label: "Paket", value: compactHudValue(game.deliveries), accent: "#ffb238", weight: 1 },
+    { icon: "speed", label: "Hız", value: `${speed}`, suffix: tight ? "km" : "km/sa", accent: speedAccent, weight: 1.06 },
+    { icon: "coin", label: "Coin", value: compactHudValue(game.runCoins), accent: "#ffd166", weight: 0.96 },
+    { icon: "record", label: "Rekor", value: compactHudValue(bestPackages), suffix: "pkt", accent: packagesNew ? "#ffb238" : "#44d7b6", weight: 1.08 },
+  ];
+  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+
+  ctx.save();
+
+  if (!isNativeApp() || !isMobileLike()) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 5;
+  }
+
+  roundRect(x, y, w, h, 12, "rgba(4, 9, 18, 0.78)", "rgba(255,255,255,0.14)");
+
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  roundRect(x + 4, y + 4, w - 8, h - 8, 9, "rgba(255,255,255,0.035)");
+
+  let cursor = x + 6;
+  const innerW = w - 12;
+
+  items.forEach((item, index) => {
+    const itemW = index === items.length - 1
+      ? x + w - 6 - cursor
+      : Math.floor((innerW * item.weight) / totalWeight);
+
+    drawHudStripItem(cursor, y + 5, itemW, h - 10, item);
+
+    cursor += itemW;
+    if (index < items.length - 1) {
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cursor, y + 10);
+      ctx.lineTo(cursor, y + h - 10);
+      ctx.stroke();
+    }
+  });
+
+  ctx.restore();
+}
+
+function drawHudStripItem(x, y, w, h, item) {
+  const narrow = w < 72;
+  const iconSize = Math.min(narrow ? 16 : 19, h - 8);
+  const iconX = narrow ? x + w / 2 : x + 13;
+  const centerY = y + h / 2;
+  const textX = narrow ? x + 4 : x + 28;
+  const maxTextW = Math.max(18, w - (narrow ? 8 : 32));
+
+  drawHudIcon(item.icon, iconX, narrow ? y + 10 : centerY, iconSize, item.accent);
+
+  ctx.textBaseline = "middle";
+  ctx.textAlign = narrow ? "center" : "left";
+
+  if (!narrow) {
+    ctx.fillStyle = "rgba(249,251,255,0.62)";
+    ctx.font = "800 7.5px system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif";
+    ctx.fillText(item.label.toUpperCase(), textX, y + 9, maxTextW);
+  }
+
+  const value = item.suffix ? `${item.value} ${item.suffix}` : String(item.value);
+  ctx.fillStyle = "#f9fbff";
+  ctx.font = `900 ${narrow ? 10 : 13}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillText(fitCanvasText(value, maxTextW), narrow ? x + w / 2 : textX, y + h - 10, maxTextW);
+}
+
+function fitCanvasText(text, maxWidth) {
+  let fitted = String(text);
+  while (ctx.measureText(fitted).width > maxWidth && fitted.length > 2) {
+    fitted = `${fitted.slice(0, -2)}…`;
+  }
+  return fitted;
+}
+
+function formatHudDistance(value) {
+  const distance = Math.max(0, Math.floor(Number(value) || 0));
+  if (distance >= 1000) {
+    const km = distance / 1000;
+    return `${km >= 10 ? Math.round(km) : km.toFixed(1).replace(".", ",")} km`;
+  }
+  return `${distance} m`;
+}
+
+function compactHudValue(value) {
+  const number = Math.max(0, Math.floor(Number(value) || 0));
+  if (number >= 1000000) return `${(number / 1000000).toFixed(1).replace(".", ",")}m`;
+  if (number >= 10000) return `${Math.round(number / 1000)}b`;
+  if (number >= 1000) return `${(number / 1000).toFixed(1).replace(".", ",")}b`;
+  return String(number);
 }
 
 function safeAreaInsets() {
@@ -2482,6 +2536,35 @@ function drawHudIcon(type, x, y, size, accent) {
       ctx.moveTo(0, -size * 0.18);
       ctx.lineTo(0, size * 0.18);
       ctx.stroke();
+    } else if (type === "speed") {
+      ctx.strokeStyle = accent || "#44d7b6";
+      ctx.lineWidth = Math.max(2, size * 0.16);
+      ctx.beginPath();
+      ctx.arc(0, size * 0.16, size * 0.38, Math.PI * 1.08, Math.PI * 1.92);
+      ctx.stroke();
+      ctx.strokeStyle = "#f9fbff";
+      ctx.lineWidth = Math.max(1.6, size * 0.1);
+      ctx.beginPath();
+      ctx.moveTo(0, size * 0.16);
+      ctx.lineTo(size * 0.24, -size * 0.08);
+      ctx.stroke();
+      ctx.fillStyle = accent || "#44d7b6";
+      ctx.beginPath();
+      ctx.arc(0, size * 0.16, size * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === "record") {
+      ctx.fillStyle = accent || "#44d7b6";
+      ctx.beginPath();
+      for (let i = 0; i < 10; i += 1) {
+        const angle = -Math.PI / 2 + i * Math.PI / 5;
+        const radius = i % 2 === 0 ? size * 0.42 : size * 0.18;
+        const px = Math.cos(angle) * radius;
+        const py = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
     }
   } finally {
     ctx.restore();
