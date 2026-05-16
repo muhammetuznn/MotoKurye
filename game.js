@@ -336,10 +336,15 @@ let musicAudio = null;
 let pendingLandscapeStart = false;
 let forceLandscapeLayout = false;
 const cityBackgroundCache = new Map();
+const staticBackgroundCache = new Map();
+const fittedTextCache = new Map();
+let coinSprite = null;
 let canvasPixelWidth = 0;
 let canvasPixelHeight = 0;
 let canvasPixelRatio = 1;
 let viewportResizeRaf = 0;
+let frameNow = 0;
+let safeAreaCache = { top: 0, right: 0, bottom: 0, left: 0 };
 let camera = {
   scale: 1,
   offsetX: 0,
@@ -686,6 +691,7 @@ function resizeCanvas() {
   const pixelHeight = Math.floor(height * dpr);
   document.documentElement.style.setProperty("--app-width", `${physicalWidth}px`);
   document.documentElement.style.setProperty("--app-height", `${physicalHeight}px`);
+  safeAreaCache = readSafeAreaInsets();
   if (canvasPixelWidth === pixelWidth && canvasPixelHeight === pixelHeight && canvasPixelRatio === dpr) {
     return;
   }
@@ -835,7 +841,7 @@ function isAndroidLike() {
 }
 
 function renderDprLimit() {
-  if (isNativeApp() && isAndroidLike()) return 1.15;
+  if (isNativeApp() && isAndroidLike()) return 1;
   if (isMobileLike()) return 1.3;
   return 1.75;
 }
@@ -1345,7 +1351,7 @@ function moveAndCull(items, dt) {
       item.rotation = wobble * 0.025;
     }
     if (item.wave) {
-      item.y = item.baseY + Math.sin(performance.now() / 320 + item.phase) * item.wave;
+      item.y = item.baseY + Math.sin(frameNow / 320 + item.phase) * item.wave;
     }
   }
   for (let i = items.length - 1; i >= 0; i -= 1) {
@@ -1857,31 +1863,55 @@ function drawWorld() {
 
 function drawBackground() {
   const city = currentCity();
-  const sky = ctx.createLinearGradient(0, 0, 0, WORLD.height);
-  sky.addColorStop(0, city.skyTop);
-  sky.addColorStop(0.55, city.skyMid);
-  sky.addColorStop(1, city.skyBottom);
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, WORLD.width, WORLD.height);
-
-  ctx.save();
   const asset = cityAssets[city.asset];
   if (asset && asset.complete && asset.naturalWidth > 0) {
-    ctx.drawImage(getCachedCityBackground(city, asset), 0, 0);
+    ctx.drawImage(getCachedStaticBackground(city, asset), 0, 0);
   } else {
+    const sky = ctx.createLinearGradient(0, 0, 0, WORLD.height);
+    sky.addColorStop(0, city.skyTop);
+    sky.addColorStop(0.55, city.skyMid);
+    sky.addColorStop(1, city.skyBottom);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+    ctx.save();
     ctx.filter = "blur(1px) saturate(0.84) brightness(0.8)";
     drawSkyMarker(city);
     drawCityLayer(0.18, 265, city.far, city.id === "mexicoCity" ? 52 : 70, city);
     drawCityLayer(0.36, 330, city.near, city.id === "mexicoCity" ? 72 : 92, city);
+    ctx.restore();
+    drawFocusShade();
   }
-  ctx.restore();
-  const focusShade = ctx.createLinearGradient(0, 0, 0, WORLD.roadY);
+  drawRainReflections(city);
+}
+
+function getCachedStaticBackground(city, asset) {
+  const key = `${city.id}:${asset.src}:${asset.naturalWidth}x${asset.naturalHeight}:static`;
+  const cached = staticBackgroundCache.get(key);
+  if (cached) return cached;
+  const buffer = document.createElement("canvas");
+  buffer.width = WORLD.width;
+  buffer.height = WORLD.height;
+  const bufferCtx = buffer.getContext("2d");
+
+  const sky = bufferCtx.createLinearGradient(0, 0, 0, WORLD.height);
+  sky.addColorStop(0, city.skyTop);
+  sky.addColorStop(0.55, city.skyMid);
+  sky.addColorStop(1, city.skyBottom);
+  bufferCtx.fillStyle = sky;
+  bufferCtx.fillRect(0, 0, WORLD.width, WORLD.height);
+  bufferCtx.drawImage(getCachedCityBackground(city, asset), 0, 0);
+  drawFocusShade(bufferCtx);
+  staticBackgroundCache.set(key, buffer);
+  return buffer;
+}
+
+function drawFocusShade(targetCtx = ctx) {
+  const focusShade = targetCtx.createLinearGradient(0, 0, 0, WORLD.roadY);
   focusShade.addColorStop(0, "rgba(4, 8, 18, 0.2)");
   focusShade.addColorStop(0.62, "rgba(4, 8, 18, 0.27)");
   focusShade.addColorStop(1, "rgba(4, 8, 18, 0.14)");
-  ctx.fillStyle = focusShade;
-  ctx.fillRect(0, 0, WORLD.width, WORLD.roadY + 8);
-  drawRainReflections(city);
+  targetCtx.fillStyle = focusShade;
+  targetCtx.fillRect(0, 0, WORLD.width, WORLD.roadY + 8);
 }
 
 function getCachedCityBackground(city, asset) {
@@ -2142,10 +2172,15 @@ function drawHudStripItem(x, y, w, h, item) {
 }
 
 function fitCanvasText(text, maxWidth) {
+  const key = `${ctx.font}|${Math.round(maxWidth)}|${text}`;
+  const cached = fittedTextCache.get(key);
+  if (cached) return cached;
   let fitted = String(text);
   while (ctx.measureText(fitted).width > maxWidth && fitted.length > 2) {
     fitted = `${fitted.slice(0, -2)}…`;
   }
+  if (fittedTextCache.size > 240) fittedTextCache.clear();
+  fittedTextCache.set(key, fitted);
   return fitted;
 }
 
@@ -2167,6 +2202,10 @@ function compactHudValue(value) {
 }
 
 function safeAreaInsets() {
+  return safeAreaCache;
+}
+
+function readSafeAreaInsets() {
   const styles = getComputedStyle(document.documentElement);
   return {
     top: cssPx(styles.getPropertyValue("--safe-top")),
@@ -2660,7 +2699,7 @@ function drawPlayer() {
   ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
   if (game.crashing) {
     const pulse = Math.max(0, game.crashTimer / game.crashDuration);
-    ctx.translate(Math.sin(performance.now() / 28) * pulse * 2.8, Math.cos(performance.now() / 33) * pulse * 2.4);
+    ctx.translate(Math.sin(frameNow / 28) * pulse * 2.8, Math.cos(frameNow / 33) * pulse * 2.4);
     ctx.globalAlpha = 0.76 + pulse * 0.24;
   }
   ctx.rotate(player.tilt);
@@ -2682,13 +2721,13 @@ function drawPlayer() {
   ctx.globalAlpha = 1;
 
   if (game.player.rainTimer > 0) {
-    ctx.globalAlpha = 0.28 + Math.sin(performance.now() / 70) * 0.12;
+    ctx.globalAlpha = 0.28 + Math.sin(frameNow / 70) * 0.12;
     roundRect(14, 4, 112, 82, 8, "rgba(101, 199, 255, 0.24)", "rgba(101, 199, 255, 0.75)");
     ctx.globalAlpha = 1;
   }
 
   if (game.player.shield > 0) {
-    ctx.globalAlpha = 0.34 + Math.sin(performance.now() / 110) * 0.1;
+    ctx.globalAlpha = 0.34 + Math.sin(frameNow / 110) * 0.1;
     ctx.strokeStyle = "#65c7ff";
     ctx.lineWidth = 5;
     ctx.beginPath();
@@ -2745,31 +2784,43 @@ function drawWheel(x, y) {
 }
 
 function drawCoins() {
+  const sprite = getCoinSprite();
   for (const coin of game.coins) {
     ctx.save();
     ctx.translate(coin.x + 12, coin.y + 12);
-    const squeeze = 0.78 + Math.sin(performance.now() / 180 + coin.spin) * 0.2;
+    const squeeze = 0.78 + Math.sin(frameNow / 180 + coin.spin) * 0.2;
     ctx.scale(squeeze, 1);
-    ctx.fillStyle = "#ffd45b";
-    ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#9f6400";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = "#9f6400";
-    ctx.font = "900 13px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("₺", 0, 1);
+    ctx.drawImage(sprite, -16, -16, 32, 32);
     ctx.restore();
   }
+}
+
+function getCoinSprite() {
+  if (coinSprite) return coinSprite;
+  const sprite = document.createElement("canvas");
+  sprite.width = 32;
+  sprite.height = 32;
+  const spriteCtx = sprite.getContext("2d");
+  spriteCtx.fillStyle = "#ffd45b";
+  spriteCtx.beginPath();
+  spriteCtx.arc(16, 16, 12, 0, Math.PI * 2);
+  spriteCtx.fill();
+  spriteCtx.strokeStyle = "#9f6400";
+  spriteCtx.lineWidth = 3;
+  spriteCtx.stroke();
+  spriteCtx.fillStyle = "#9f6400";
+  spriteCtx.font = "900 13px system-ui";
+  spriteCtx.textAlign = "center";
+  spriteCtx.textBaseline = "middle";
+  spriteCtx.fillText("₺", 16, 17);
+  coinSprite = sprite;
+  return coinSprite;
 }
 
 function drawPowerups() {
   for (const powerup of game.powerups) {
     ctx.save();
-    const pulse = 1 + Math.sin(performance.now() / 130 + powerup.phase) * 0.08;
+    const pulse = 1 + Math.sin(frameNow / 130 + powerup.phase) * 0.08;
     ctx.translate(powerup.x + powerup.w / 2, powerup.y + powerup.h / 2);
     ctx.scale(pulse, pulse);
     ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
@@ -2870,7 +2921,7 @@ function drawAssetObstacle(obstacle) {
   if (obstacle.id === "door") {
     return drawDoorAssetObstacle(obstacle);
   }
-  const bob = obstacle.id === "seagull" ? Math.sin(performance.now() / 140) * 4 : 0;
+  const bob = obstacle.id === "seagull" ? Math.sin(frameNow / 140) * 4 : 0;
   const ok = drawAsset(obstacle.asset, obstacle.x, obstacle.y + bob, obstacle.w, obstacle.h);
   if (ok && obstacle.id === "cloud") {
     ctx.save();
@@ -3015,6 +3066,7 @@ function drawParticles() {
 }
 
 function loop(time) {
+  frameNow = time;
   if (document.hidden) {
     lastTime = time;
     requestAnimationFrame(loop);
