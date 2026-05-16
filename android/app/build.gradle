@@ -7,6 +7,14 @@ if (hasReleaseKeystore) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def releaseKeystoreKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def hasCompleteReleaseKeystore = hasReleaseKeystore && releaseKeystoreKeys.every {
+    keystoreProperties[it]?.trim()
+}
+def releaseStoreFile = hasCompleteReleaseKeystore
+    ? new File(keystorePropertiesFile.parentFile, keystoreProperties['storeFile'])
+    : null
+
 android {
     namespace "com.kacakkurye.sonpaket"
     compileSdk rootProject.ext.compileSdkVersion
@@ -25,8 +33,8 @@ android {
     }
     signingConfigs {
         release {
-            if (hasReleaseKeystore) {
-                storeFile file(keystoreProperties['storeFile'])
+            if (hasCompleteReleaseKeystore) {
+                storeFile releaseStoreFile
                 storePassword keystoreProperties['storePassword']
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
@@ -36,7 +44,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            if (hasReleaseKeystore) {
+            if (hasCompleteReleaseKeystore) {
                 signingConfig signingConfigs.release
             }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -63,6 +71,24 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+tasks.register('validateReleaseSigning') {
+    doLast {
+        if (!hasCompleteReleaseKeystore) {
+            throw new GradleException(
+                "Release signing is not configured. Create android/keystore.properties with storeFile, storePassword, keyAlias, and keyPassword before publishing."
+            )
+        }
+
+        if (!releaseStoreFile.exists()) {
+            throw new GradleException("Release keystore file not found: ${releaseStoreFile}")
+        }
+    }
+}
+
+tasks.matching { it.name in ['preReleaseBuild', 'assembleRelease', 'bundleRelease'] }.configureEach {
+    dependsOn tasks.named('validateReleaseSigning')
+}
 
 try {
     def servicesJSON = file('google-services.json')

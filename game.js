@@ -2006,7 +2006,7 @@ function drawScreenHud() {
   drawScreenPowerHud(stripX, top + stripH + gap);
 
   if (game.messageTimer > 0) {
-    const banner = messageBannerLayout(screenW, screenH, compact, mobileLandscape);
+    const banner = messageBannerLayout(screenW, screenH, compact, mobileLandscape, top + stripH + 4);
     const width = banner.width;
     const height = banner.height;
 
@@ -2041,12 +2041,12 @@ function drawScreenHud() {
   ctx.restore();
 }
 
-function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
+function messageBannerLayout(screenW, screenH, compact, mobileLandscape, hudBottom = 0) {
   if (mobileLandscape) {
     return {
-      width: clamp(screenW * 0.25, 136, 188),
+      width: clamp(screenW * 0.28, 148, 210),
       height: 30,
-      y: clamp(screenH * 0.18, 58, 72),
+      y: hudBottom,
     };
   }
 
@@ -2054,14 +2054,14 @@ function messageBannerLayout(screenW, screenH, compact, mobileLandscape) {
     return {
       width: Math.min(screenW * 0.68, 258),
       height: 36,
-      y: Math.max(82, Math.round(screenH * 0.13)),
+      y: Math.max(hudBottom, 58),
     };
   }
 
   return {
     width: 292,
     height: 38,
-    y: 72,
+    y: Math.max(hudBottom, 70),
   };
 }
 
@@ -2100,21 +2100,6 @@ function drawHudStrip(x, y, w, h) {
 
   ctx.save();
 
-  if (!isNativeApp() || !isMobileLike()) {
-    ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 5;
-  }
-
-  roundRect(x, y, w, h, 12, "rgba(4, 9, 18, 0.78)", "rgba(255,255,255,0.14)");
-
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
-
-  ctx.fillStyle = "rgba(255,255,255,0.05)";
-  roundRect(x + 4, y + 4, w - 8, h - 8, 9, "rgba(255,255,255,0.035)");
-
   let cursor = x + 6;
   const innerW = w - 12;
 
@@ -2126,14 +2111,6 @@ function drawHudStrip(x, y, w, h) {
     drawHudStripItem(cursor, y + 5, itemW, h - 10, item);
 
     cursor += itemW;
-    if (index < items.length - 1) {
-      ctx.strokeStyle = "rgba(255,255,255,0.1)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cursor, y + 10);
-      ctx.lineTo(cursor, y + h - 10);
-      ctx.stroke();
-    }
   });
 
   ctx.restore();
@@ -2248,36 +2225,6 @@ function drawMessageToast(x, y, width, height, text, compact, mobileLandscape, a
   ctx.save();
 
   ctx.globalAlpha = alpha;
-
-  if (!isNativeApp() || !isMobileLike()) {
-    ctx.shadowColor = palette.glow;
-    ctx.shadowBlur = compact ? 8 : 13;
-    ctx.shadowOffsetY = 3;
-  }
-
-  roundRect(
-    x,
-    y,
-    width,
-    height,
-    height / 2,
-    palette.fill,
-    palette.stroke
-  );
-
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
-
-  roundRect(
-    iconX,
-    iconY,
-    iconBox,
-    iconBox,
-    iconBox / 2,
-    "rgba(255, 255, 255, 0.08)",
-    palette.accent
-  );
 
   drawToastIcon(
     palette.icon,

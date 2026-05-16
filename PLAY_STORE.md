@@ -8,7 +8,7 @@ Bu proje Capacitor ile Android uygulamasına sarılır. Play Store'a yüklemek i
 - Android SDK
 - Node.js
 
-Bu makinede şu an `JAVA_HOME` ayarlı olmadığı için Gradle derlemesi çalışmaz. Android Studio kuruluysa `JAVA_HOME` değerini Android Studio içindeki `jbr` klasörüne ver.
+Bu makinede Java bulunuyor ve debug Android derlemesi çalışıyor. Release AAB üretimi için ayrıca imzalama dosyaları gerekir.
 
 ## Geliştirme APK
 
@@ -52,4 +52,14 @@ npm run android:bundle
 android/app/build/outputs/bundle/release/app-release.aab
 ```
 
+Release imzalama eksikse build bilerek durur ve `android/keystore.properties` dosyasını tamamlamanı ister.
+
 `keystore.properties` ve `.jks` dosyaları `.gitignore` içindedir; repoya eklenmemelidir.
+
+## Yayın Notları
+
+- Paket adı: `com.kacakkurye.sonpaket`
+- Uygulama adı: `Kaçak Kurye`
+- Target SDK: 35
+- Android yedekleme kapalıdır; oyun kayıtları ve ayarlar cihaz dışına otomatik taşınmaz.
+- Cleartext network trafiği kapalıdır.
